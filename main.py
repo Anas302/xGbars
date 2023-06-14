@@ -10,7 +10,6 @@ ax.get_yaxis().set_visible(False)
 ax.set_aspect("equal")
 ax.autoscale(tight=True)
 
-
 # Create Patch objects
 TOTAL_TIMELINE_WIDTH = 9  # 9 units corresponds to 90 minutes
 XG_BAR_WIDTH = 0.1  # 0.1 unit corresponds to 1 minute for each expected goal bar
@@ -19,7 +18,7 @@ timeline_height = 0.05
 xg_bar_height = 0.2
 
 
-def draw_xg_bar(minute: int, xG: float = 0.0, isAway: bool = False, color: str = "#000000"):
+def draw_xg_bar(minute: int, xG: float = 0.0, isAway: bool = False, color=(0.0, 0.0, 0.0)):
     """
     Draw an xG bar along the timeline axis. If the xG was 1 a circle will also be drawn on the bar to indicate a goal.
     Away team is plotted under the timeline while the home team is plotted over it. The color is by default set to black
@@ -40,7 +39,7 @@ def draw_xg_bar(minute: int, xG: float = 0.0, isAway: bool = False, color: str =
                              height=-xg_bar_height, fc=color)
 
             if xG == 1:
-                goal = Circle(xy=(minute + XG_BAR_WIDTH + XG_BAR_WIDTH/2, 0.5 - xg_bar_height - 0.05),
+                goal = Circle(xy=(minute + XG_BAR_WIDTH + XG_BAR_WIDTH / 2, 0.5 - xg_bar_height - 0.05),
                               radius=0.1, fc=color)
                 ax.add_patch(goal)
 
@@ -51,7 +50,7 @@ def draw_xg_bar(minute: int, xG: float = 0.0, isAway: bool = False, color: str =
             home = Rectangle(xy=(minute + XG_BAR_WIDTH, 0.5 + timeline_height / 2), width=XG_BAR_WIDTH,
                              height=xg_bar_height, fc=color)
             if xG == 1:
-                goal = Circle(xy=(minute + XG_BAR_WIDTH + XG_BAR_WIDTH/2, 0.5 + xg_bar_height + 0.05),
+                goal = Circle(xy=(minute + XG_BAR_WIDTH + XG_BAR_WIDTH / 2, 0.5 + xg_bar_height + 0.05),
                               radius=0.1, fc=color)
                 ax.add_patch(goal)
             ax.add_patch(home)
@@ -61,9 +60,22 @@ def draw_xg_bar(minute: int, xG: float = 0.0, isAway: bool = False, color: str =
     ax.add_patch(timeline)
 
 
-draw_xg_bar(0, 1)
-draw_xg_bar(45, 1, False, color='#1B398A')
-draw_xg_bar(25, 0, True)
+def get_rgb_from_xg(xG):
+    # Ensure xG is within the valid range [0, 1]
+    assert 0 <= xG <= 1, "xG score must be a value between 0 and 1 inclusive"
+
+    # Calculate interpolated color values
+    red = 1 - xG
+    green = 1 - xG
+    blue = 1 - xG
+
+    return red, green, blue
+
+
+draw_xg_bar(0, 0.76, color=get_rgb_from_xg(0.76))
+draw_xg_bar(45, 1, False, color=get_rgb_from_xg(1))
+draw_xg_bar(25, 0, True, color=get_rgb_from_xg(0))
+draw_xg_bar(68, 0.43, False, color=get_rgb_from_xg(0.43))
 draw_xg_bar(90, 1, True)
 
 # Set the aspect ratio to equal and adjust the limits
