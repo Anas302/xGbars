@@ -6,7 +6,6 @@ import math
 
 
 # TODO:
-#   - Add a thin vertical bar to indicate the minute along the timeline.
 #   - Add bar height as a measure for xG as well.
 #   - improve load_match_data() to accept data from different sources
 #   - consider the case when the input tuples are larger than 90 for one or both of the teams.
@@ -40,9 +39,9 @@ class Shot:
 
 class XGBars:
 
-    def __init__(self, data: List[Union[Tuple[int, float, bool, bool], Tuple[int, float, bool]]] = None,
-                 match_time=90, timeline_color=(0.0, 0.0, 0.0), timeline_height=0.05, xg_bar_height=0.75,
-                 coloring_mode='linear', show=True):
+    def __init__(self, data: List[Union[Tuple[int, float, bool, bool], Tuple[int, float, bool], Shot]] = None,
+                 match_time: int = 90, timeline_color: tuple = (0.0, 0.0, 0.0), timeline_height: float = 0.05,
+                 bars_height: float = 0.75, coloring_mode: str = 'linear', show: bool = True):
         """
 
         :param data:
@@ -58,7 +57,7 @@ class XGBars:
         :param match_time: the time of the match for which the xG has been recorded.
         :param timeline_color: the color of the timeline (line that divides the xG visuals to two halves). Black by default.
         :param timeline_height: the height of the timeline.
-        :param xg_bar_height: the height of the xG bars.
+        :param bars_height: the height of the xG bars.
         """
         # Create a figure and axes
         self._fig = plt.figure(figsize=(12, 6), dpi=200)
@@ -70,30 +69,30 @@ class XGBars:
         self._ax.autoscale(tight=True)
 
         # xGBars configurations
-        self.timeline_color = timeline_color
-        self.coloring_mode = coloring_mode
         self.match_time = match_time
-        self._total_timeline_width = self.match_time / 10
-        self._xg_bar_width = 0.1
         self.timeline_height = timeline_height
-        self.xg_bar_height = xg_bar_height
+        self._XG_BAR_WIDTH = 0.2
 
         assert self.match_time > 0, "Match time cannot be 0 or a negative number"
         assert self.timeline_height > 0, "The timeline cannot have a height of 0 or negative number"
-        assert self.xg_bar_height > 0, "The xG bars' heights cannot be a 0 or negative number"
+        assert bars_height > 0, "The xG bars' heights cannot be a 0 or negative number"
         assert data is not None, "No data has been provided to create the xG Bars visualization"
-        self._create_xGBars(data=data)
+        assert coloring_mode == "linear" or coloring_mode == "cubic" or \
+               coloring_mode == "sqrt" or coloring_mode == "quad", \
+               "coloring_mode must be one of those values: ['linear', 'cubic', 'sqrt', 'quad']"
+
+        self._create_xGBars(data=data, timeline_color=timeline_color,
+                            timeline_length=self.match_time/10, bars_height=bars_height)
         if show:
             plt.show()
         else:
             plt.close()
 
-    def _draw_xg_bar(self, minute: int, xG: float = 0.0, isAway: bool = False, isGoal: bool = False):
+    def _draw_xg_bar(self, minute: int, color: tuple, height: float, isAway: bool = False, isGoal: bool = False):
         """
         Draw a single xG bar along the timeline axis. If the xG results in a goal, a circle will also be drawn on the
         bar to indicate a goal. Away team is plotted under the timeline while the home team is plotted over it.
         :param minute: the time in minutes in which the xG is to be plotted. The time must be between 0 and 90 minutes.
-        :param xG: the expected goal score during this minute of play.
         :param isAway: whether the xG belongs to the away team or the home team.
         :param isGoal: whether the shot resulted in a goal or not. Set to False by default.
         """
@@ -101,44 +100,41 @@ class XGBars:
 
         if isAway:
             # create the away xG bar
-            away = Rectangle(xy=(minute + self._xg_bar_width, 0.5 - self.timeline_height / 2), width=self._xg_bar_width,
-                             height=-self.xg_bar_height, fc=self.get_rgb_from_xg(xG, self.coloring_mode))
+            away = Rectangle(xy=(minute + self._XG_BAR_WIDTH, 0.5 - self.timeline_height / 2), width=self._XG_BAR_WIDTH,
+                             height=-height, fc=color)
             if isGoal:
                 goal = Circle(
-                    xy=(minute + self._xg_bar_width + self._xg_bar_width / 2, 0.5 - self.xg_bar_height - 0.05),
-                    radius=self._xg_bar_width + self.xg_bar_height / 10,
-                    fc=self.get_rgb_from_xg(xG, self.coloring_mode))
+                    xy=(minute + self._XG_BAR_WIDTH + self._XG_BAR_WIDTH / 2, 0.5 - height - 0.05),
+                    radius=self._XG_BAR_WIDTH + height / 10, fc=color)
                 self._ax.add_patch(goal)
             self._ax.add_patch(away)
 
         else:
             # create the home xG bar
-            home = Rectangle(xy=(minute + self._xg_bar_width, 0.5 + self.timeline_height / 2),
-                             width=self._xg_bar_width, height=self.xg_bar_height,
-                             fc=self.get_rgb_from_xg(xG, self.coloring_mode))
+            home = Rectangle(xy=(minute + self._XG_BAR_WIDTH, 0.5 + self.timeline_height / 2),
+                             width=self._XG_BAR_WIDTH, height=height, fc=color)
             if isGoal:
                 goal = Circle(
-                    xy=(minute + self._xg_bar_width + self._xg_bar_width / 2, 0.5 + self.xg_bar_height + 0.05),
-                    radius=self._xg_bar_width + self.xg_bar_height / 10,
-                    fc=self.get_rgb_from_xg(xG, self.coloring_mode))
+                    xy=(minute + self._XG_BAR_WIDTH + self._XG_BAR_WIDTH / 2, 0.5 + height + 0.05),
+                    radius=self._XG_BAR_WIDTH + height / 10, fc=color)
                 self._ax.add_patch(goal)
             self._ax.add_patch(home)
 
-    def _draw_timeline(self):
+    def _draw_timeline(self, timeline_length, color):
+        # time axis
+        timeline = Rectangle(xy=(0, 0.5 - self.timeline_height / 2), width=timeline_length,
+                             height=self.timeline_height, fc=color)
         for minute in range(self.match_time - 2):
             minute /= 10
             minute += 0.1
-            # baseline
-            timeline = Rectangle(xy=(0, 0.5 - self.timeline_height / 2), width=self._total_timeline_width,
-                                 height=self.timeline_height, fc=self.timeline_color)
-
             # coordinates of each minute
-            mins_coords = Rectangle(xy=(minute + 3*self._xg_bar_width/8, 0.5 - self.timeline_height),
-                                    width=self._xg_bar_width / 5, height=self.timeline_height*2.2, fc=self.timeline_color)
+            mins_coords = Rectangle(xy=(minute + 3 * self._XG_BAR_WIDTH / 8, 0.5 - self.timeline_height),
+                                    width=self._XG_BAR_WIDTH / 5, height=self.timeline_height * 2.2,
+                                    fc=color)
             self._ax.add_patch(mins_coords)
             self._ax.add_patch(timeline)
 
-    def _create_xGBars(self, data):
+    def _create_xGBars(self, data, timeline_color, timeline_length, bars_height):
         """
         Draw the xG Bars and timeline for an entire list of expected goals data.
         :param data: A list of 3D Tuples of the form (minute, xG, isAway, isGoal),
@@ -165,13 +161,18 @@ class XGBars:
             if isGoal:
                 goals.append(Shot(time, xG, isAway, isGoal))
             else:
-                self._draw_xg_bar(minute=time, xG=xG, isAway=isAway, isGoal=isGoal)
+                self._draw_xg_bar(minute=time, color=self.get_rgb_from_xg(xG),
+                                  isAway=isAway, isGoal=isGoal, height=bars_height)
 
         # draw goal-scoring shots at the end to be on front
         for goal in goals:
-            self._draw_xg_bar(goal.minute, goal.xG, goal.isAway, goal.isGoal)
+            self._draw_xg_bar(minute=goal.minute,
+                              color=self.get_rgb_from_xg(goal.xG),
+                              isAway=goal.isAway,
+                              isGoal=goal.isGoal,
+                              height=bars_height)
 
-        self._draw_timeline()
+        self._draw_timeline(color=timeline_color, timeline_length=timeline_length)
 
     @staticmethod
     def load_match_data(filepath):
@@ -239,17 +240,17 @@ shots = Shot(45, 0.8, False, False) + Shot(45, 0.4, False, False)
 
 myXGBars = XGBars(results, match_time=90, coloring_mode='cubic', show=False)
 myXGBars2 = XGBars([
-    (0, 0.1, False),
+    (8, 0.1, False),
     (10, 0.2, False),
     (12, 0.3, False),
     (14, 0.4, False),
     (16, 0.5, False),
     (8, 0.1, True),
-    (10, 0.2, True),
+    (10, 0.2, True, True),
     (12, 0.3, True),
     (14, 0.4, True),
     (16, 0.5, True),
-    (22, 0.6, False, True),
+    (22, 0.6, False),
     (24, 0.7, False, True),
     (26, 0.8, False),
     (28, 0.9, False),
@@ -259,4 +260,18 @@ myXGBars2 = XGBars([
     (26, 0.8, True),
     (28, 0.9, True),
     (30, 1, True),
-], match_time=90)
+], match_time=90, show=False)
+
+myXGBars3 = XGBars([
+    (11, 0.23, False),
+    (15, 0.11, False),
+    (21, 0.54, True, True),
+    (38, 0.4, False),
+    (49, 0.15, True),
+    (56, 0.6, True),
+    (60, 0.8, False, True),
+    (72, 0.18, False),
+    (75, 0.30, False),
+    (80, 0.14, True),
+    (87, 0.39, True),
+])
