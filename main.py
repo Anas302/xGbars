@@ -62,7 +62,7 @@ class XGBars:
         If the file name and extension are not provided, the current time will be used as the name with .png extension.
         """
         # Create a figure and axes
-        self._fig = plt.figure(figsize=(20, 4))
+        self._fig = plt.figure(figsize=(23, 3.85))
         self._ax = plt.axes([0, 0, 1, 1], frameon=False)  # change frameon = False to remove box borders
         self._ax.grid(False)
         self._ax.get_xaxis().set_visible(False)
@@ -100,11 +100,12 @@ class XGBars:
             directory, file_name = os.path.split(saveto)
             filename, extension = os.path.splitext(file_name)
             if filename == '' or extension == '':
-                new_file_path = f"{saveto}\\{datetime.now().strftime('%H-%M-%S-%f')}.png"
+                new_file_path = os.path.join(f"{saveto}", f"{datetime.now().strftime('%H-%M-%S-%f')}.png")
                 print(f"The figure is saved as `{new_file_path}`,"
-                      f"since the provided path `{saveto}` doesn't contain the file name and/or its extension")
+                      f"since the provided path `{saveto}` doesn't contain the file name and its extension")
+                saveto = new_file_path
             plt.savefig(saveto)
-
+            print(f"File `{saveto}` has been saved sucessfully")
         if show:
             plt.show()
         else:
@@ -289,4 +290,5 @@ if __name__ == '__main__':
     myXGBars3 = XGBars(
         home_scores=[(0, 0.4), (11, 0.23), (15, 0.11), (38, 0.4), (60, 0.8, True), (72, 0.18), (75, 0.30), (89, 0.39)],
         away_scores=[(21, 0.54, True), (56, 0.6), (49, 0.15), (87, 0.39), (80, 0.14)],
+        saveto="./myFig.png"
     )
