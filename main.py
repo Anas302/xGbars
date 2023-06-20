@@ -7,10 +7,9 @@ import math
 
 # TODO:
 #   - Add bar height as a measure for xG as well.
-#   - improve load_match_data() to accept data from different sources
-#   - consider the case when the input tuples are larger than 90 for one or both of the teams.
 #   - option to display the xG above
 #   - package up the code as a PyPi package
+#   - Add different color spectrums option
 
 
 class Shot:
@@ -45,7 +44,6 @@ class XGBars:
                  timeline_ticks_color: tuple = (0.0, 0.0, 0.0), timeline_height: float = 0.08,
                  bars_width: float = 0.2, bars_height: float = 0.75, coloring_mode: str = 'linear', show: bool = True):
         """
-
         :param home_scores: a list of 3D or 4D Tuples of the form (minute, xG, isGoal) of the home team. Where:
         - 'minute' is the time of when the shot was taken.
         - 'xG' is the xG score of the shot.
@@ -53,7 +51,7 @@ class XGBars:
           goal or not, defaults to False (no goal).
         :param away_scores: same as 'home_scores' parameter except the Tuples are for the away team.
         :param match_time: the time of the match for which the xG has been recorded.
-        :param timeline_color: the color of the timeline (line that divides the xG visuals to two halves). Black by default.
+        :param timeline_color: the color of the timeline (x-axis). Set to black by default.
         :param bars_width: the width of all xG bars.
         :param bars_height: the height of the xG bars.
         """
@@ -112,22 +110,27 @@ class XGBars:
         away_circle_y_position = 0.5 - height - 0.05
         home_circle_y_position = 0.5 + height + 0.05
         circle_radius = self.bars_width + height / 10
+        circle_outline_radius = circle_radius*1.5
 
         if isAway:
             # create the away xG bar
             away = Rectangle(xy=(bar_x_position, bar_y_position), width=self.bars_width, height=-height, fc=color)
-            if isGoal:
-                goal = Circle(xy=(circle_x_position, away_circle_y_position), radius=circle_radius, fc=color)
-                self._ax.add_patch(goal)
             self._ax.add_patch(away)
+            if isGoal:  # if goal, draw a black circle outlined in white
+                goal = Circle(xy=(circle_x_position, away_circle_y_position), radius=circle_radius, fc='black')
+                goal_outline = Circle(xy=(circle_x_position, away_circle_y_position), radius=circle_radius*1.5, fc='white')
+                self._ax.add_patch(goal_outline)
+                self._ax.add_patch(goal)
 
         else:
             # create the home xG bar
             home = Rectangle(xy=(bar_x_position, bar_y_position), width=self.bars_width, height=height, fc=color)
-            if isGoal:
-                goal = Circle(xy=(circle_x_position, home_circle_y_position), radius=circle_radius, fc=color)
-                self._ax.add_patch(goal)
             self._ax.add_patch(home)
+            if isGoal:
+                goal = Circle(xy=(circle_x_position, home_circle_y_position), radius=circle_radius, fc='black')
+                goal_outline = Circle(xy=(circle_x_position, home_circle_y_position), radius=circle_outline_radius, fc='white')
+                self._ax.add_patch(goal_outline)
+                self._ax.add_patch(goal)
 
     def _draw_timeline(self, timeline_length, axis_color, ticks_color):
 
@@ -137,16 +140,22 @@ class XGBars:
             tick_width = self.bars_width / 4
             tick_y_position = 0.5 - (tick_height / 2) - self.timeline_height
 
-            # draw tick for every 15 minute.
-            if minute % 15 == 0:
+            # draw tick for every 15 minute. And a bigger tick for minute 45
+            if minute % 45 == 0:
+                mins_tick = Rectangle(xy=(tick_x_position, tick_y_position / 2),
+                                      width=tick_width * 2, height=tick_height * 4,
+                                      fc=ticks_color)
+                self._ax.add_patch(mins_tick)
+
+            elif minute % 15 == 0:
                 mins_tick = Rectangle(xy=(tick_x_position, tick_y_position),
                                       width=tick_width, height=tick_height * 2,
                                       fc=ticks_color)
+                self._ax.add_patch(mins_tick)
             # else:
             #     mins_tick = Rectangle(xy=(tick_x_position, tick_y_position),
             #                           width=tick_width, height=tick_height,
             #                           fc=ticks_color)
-                self._ax.add_patch(mins_tick)
 
         # time axis
         timeline = Rectangle(xy=(0, 0.5 - self.timeline_height / 2), width=timeline_length,
@@ -262,5 +271,5 @@ shots = Shot(45, 0.8, False, False) + Shot(45, 0.4, False, False)
 
 myXGBars3 = XGBars(
     home_scores=[(0, 0.4), (11, 0.23), (15, 0.11), (38, 0.4), (60, 0.8, True), (72, 0.18), (75, 0.30), (89, 0.39)],
-    away_scores=[(21, 0.54, True), (56, 0.6), (49, 0.15), (87, 0.39), (80, 0.14)],
+    away_scores=[(21, 0.54, True), (56, 0.6), (49, 0.15), (87, 0.39), (80, 0.14), (45, 0.2, True)], bars_height=1
 )
