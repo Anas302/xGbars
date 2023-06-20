@@ -1,9 +1,11 @@
+import os
+
 from matplotlib.patches import Circle, Rectangle
 from typing import List, Tuple, Union
 import matplotlib.pyplot as plt
 import pandas as pd
 import math
-
+from datetime import datetime
 
 # TODO:
 #   - Add bar height as a measure for xG as well.
@@ -42,7 +44,8 @@ class XGBars:
                  away_scores: List[Union[Tuple[int, float, bool], Tuple[int, float]]] = None,
                  match_time: int = 90, timeline_color: tuple = (0.0, 0.0, 0.0),
                  timeline_ticks_color: tuple = (0.0, 0.0, 0.0), timeline_height: float = 0.08,
-                 bars_width: float = 0.2, bars_height: float = 0.75, coloring_mode: str = 'linear', show: bool = True):
+                 bars_width: float = 0.2, bars_height: float = 1.0, coloring_mode: str = 'linear',
+                 show: bool = True, saveto: str = None):
         """
         :param home_scores: a list of 3D or 4D Tuples of the form (minute, xG, isGoal) of the home team. Where:
         - 'minute' is the time of when the shot was taken.
@@ -52,11 +55,14 @@ class XGBars:
         :param away_scores: same as 'home_scores' parameter except the Tuples are for the away team.
         :param match_time: the time of the match for which the xG has been recorded.
         :param timeline_color: the color of the timeline (x-axis). Set to black by default.
-        :param bars_width: the width of all xG bars.
-        :param bars_height: the height of the xG bars.
+        :param bars_width: the width of all xG bars. Defaults to 0.2
+        :param bars_height: the height of the xG bars. Defaults to 1.0
+        :param saveto: the path where the figure will be saved. Defaults to 'None' (do not save the figure).
+        Example of a valid file path: `C:/Users/xx/Desktop/myFig.png` or `./myFig.jpg`.
+        If the file name and extension are not provided, the current time will be used as the name with .png extension.
         """
         # Create a figure and axes
-        self._fig = plt.figure(figsize=(12, 6), dpi=200)
+        self._fig = plt.figure(figsize=(20, 4))
         self._ax = plt.axes([0, 0, 1, 1], frameon=False)  # change frameon = False to remove box borders
         self._ax.grid(False)
         self._ax.get_xaxis().set_visible(False)
@@ -88,6 +94,16 @@ class XGBars:
                             timeline_ticks_color=timeline_ticks_color,
                             timeline_length=timeline_length,
                             bars_height=bars_height)
+
+        if saveto is not None:
+            assert os.path.isdir(os.path.dirname(saveto)), f"The provided file path {saveto} doesn't exist"
+            directory, file_name = os.path.split(saveto)
+            filename, extension = os.path.splitext(file_name)
+            if filename == '' or extension == '':
+                new_file_path = f"{saveto}\\{datetime.now().strftime('%H-%M-%S-%f')}.png"
+                print(f"The figure is saved as `{new_file_path}`,"
+                      f"since the provided path `{saveto}` doesn't contain the file name and/or its extension")
+            plt.savefig(saveto)
 
         if show:
             plt.show()
@@ -132,18 +148,20 @@ class XGBars:
                 self._ax.add_patch(goal_outline)
                 self._ax.add_patch(goal)
 
-    def _draw_timeline(self, timeline_length, axis_color, ticks_color):
+    def _draw_timeline(self, timeline_length: float,
+                       axis_color: Tuple[float, float, float],
+                       ticks_color: Tuple[float, float, float]):
 
         for minute in range(self.match_time + 2):
             tick_x_position = (minute / 10) * (self.bars_width / 0.1)
             tick_height = self.timeline_height * 2
-            tick_width = self.bars_width / 4
+            tick_width = self.bars_width / 5
             tick_y_position = 0.5 - (tick_height / 2) - self.timeline_height
 
             # draw tick for every 15 minute. And a bigger tick for minute 45
             if minute % 45 == 0:
-                mins_tick = Rectangle(xy=(tick_x_position, tick_y_position / 2),
-                                      width=tick_width * 2, height=tick_height * 4,
+                mins_tick = Rectangle(xy=(tick_x_position, tick_y_position/ 1.25),
+                                      width=tick_width * 2, height=tick_height * 3,
                                       fc=ticks_color)
                 self._ax.add_patch(mins_tick)
 
@@ -262,14 +280,13 @@ class XGBars:
         return red, green, blue
 
 
-# test on real data for England events over all the matches in Wyscout dataset.
-team1_mins, team1_xG, team2_mins, team2_xG = XGBars.load_match_data(r"C:\Users\anas3\Desktop\ETH\xG-data.csv")
-results = [(min1, xG1, False) for min1, xG1 in zip(team1_mins, team1_xG)]
-results.extend([(min2, xG2, True) for min2, xG2 in zip(team2_mins, team2_xG)])
+if __name__ == '__main__':
+    # test on real data for England events over all the matches in Wyscout dataset.
+    team1_mins, team1_xG, team2_mins, team2_xG = XGBars.load_match_data(r"C:\Users\anas3\Desktop\ETH\xG-data.csv")
+    results = [(min1, xG1, False) for min1, xG1 in zip(team1_mins, team1_xG)]
+    results.extend([(min2, xG2, True) for min2, xG2 in zip(team2_mins, team2_xG)])
 
-shots = Shot(45, 0.8, False, False) + Shot(45, 0.4, False, False)
-
-myXGBars3 = XGBars(
-    home_scores=[(0, 0.4), (11, 0.23), (15, 0.11), (38, 0.4), (60, 0.8, True), (72, 0.18), (75, 0.30), (89, 0.39)],
-    away_scores=[(21, 0.54, True), (56, 0.6), (49, 0.15), (87, 0.39), (80, 0.14), (45, 0.2, True)], bars_height=1
-)
+    myXGBars3 = XGBars(
+        home_scores=[(0, 0.4), (11, 0.23), (15, 0.11), (38, 0.4), (60, 0.8, True), (72, 0.18), (75, 0.30), (89, 0.39)],
+        away_scores=[(21, 0.54, True), (56, 0.6), (49, 0.15), (87, 0.39), (80, 0.14)],
+    )
