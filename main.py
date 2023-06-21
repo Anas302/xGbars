@@ -216,7 +216,7 @@ class XGBars:
         for shot in shots_list:
             time, xG, isAway, isGoal = shot.minute, shot.xG, shot.isAway, shot.isGoal
             assert 0 <= xG <= 1, "xG score must be a value between 0 and 1 inclusive"
-            assert 0 <= time <= 90, "Minutes must be a value between 0 and 90 inclusive"
+            assert 0 <= time <= self.match_time, "Minutes must be a value between 0 and the match time inclusive"
             assert isinstance(time, int), "Minutes must be an integer"
             if isGoal:
                 goals.append(Shot(time, xG, isAway, isGoal))
