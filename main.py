@@ -45,8 +45,8 @@ class XGBars:
                  away_scores: List[Union[Tuple[int, float, bool], Tuple[int, float]]] = None,
                  match_time: int = 90, timeline_color: tuple = (0.0, 0.0, 0.0),
                  timeline_ticks_color: tuple = (0.0, 0.0, 0.0), timeline_height: float = 0.08,
-                 bars_width: float = 0.5, bars_height: float = 1.8, coloring_mode: str = 'linear',
-                 goals_outlined: bool = False, show: bool = True, saveto: str = None):
+                 bars_width: float = 0.5, bars_height: float = 2.8, coloring_mode: str = 'linear',
+                 goals_outlined: bool = True, show: bool = True, saveto: str = None):
         """
         :param home_scores: a list of 3D or 4D Tuples of the form (minute, xG, isGoal) of the home team. Where:
         - 'minute' is the time of when the shot was taken.
@@ -58,17 +58,19 @@ class XGBars:
         :param timeline_color: the color of the timeline (x-axis). Set to black by default.
         :param bars_width: the width of all xG bars. Defaults to 0.2
         :param bars_height: the height of the xG bars. Defaults to 1.0
-        :param saveto: the path where the figure will be saved. Defaults to 'None' (do not save the figure).
+        :param saveto: the path where the figure will be saved. Defaults to 'None' (do not save the figure). Save as
+        .PNG if you want the background to be transparent.
         Example of a valid file path: `C:/Users/xx/Desktop/myFig.png` or `./myFig.jpg`.
         If the file name and extension are not provided, the current time will be used as the name with .png extension.
         """
         # Create a figure and axes
-        MIN_POINT = (0.5 - bars_height - 0.05) - (bars_width + bars_height/10)
-        MAX_POINT = (0.5 + bars_height + 0.05) + (bars_width + bars_height/10)
+        MIN_POINT = (0.5 - bars_height - 0.05) - (bars_width + bars_height / 10)
+        MAX_POINT = (0.5 + bars_height + 0.05) + (bars_width + bars_height / 10)
         FIG_HEIGHT = MAX_POINT - MIN_POINT
-        FIG_LENGTH = (match_time / 10) * (bars_width / 0.1)
-        self._fig = plt.figure(figsize=(FIG_LENGTH*0.9, FIG_HEIGHT))
+        FIG_WIDTH = (match_time / 10) * (bars_width / 0.1)
+        self._fig = plt.figure(figsize=(FIG_WIDTH * 0.9, FIG_HEIGHT))
         self._ax = plt.axes([0, 0, 1, 1], frameon=False)  # change frameon = False to remove box borders
+        self._fig.patch.set_alpha(0)
         self._ax.grid(False)
         self._ax.get_xaxis().set_visible(False)
         self._ax.get_yaxis().set_visible(False)
@@ -85,10 +87,10 @@ class XGBars:
         assert bars_height > 0, "The xG bars' heights cannot be a 0 or negative number"
         assert coloring_mode == "linear" or coloring_mode == "cubic" or \
                coloring_mode == "sqrt" or coloring_mode == "quad", \
-            "coloring_mode must be one of those values: ['linear', 'cubic', 'sqrt', 'quad']"
+               "coloring_mode must be one of those values: ['linear', 'cubic', 'sqrt', 'quad']"
         assert bars_width > 0, "The xG bars' width cannot be a 0 or negative number"
 
-        timeline_length = FIG_LENGTH
+        timeline_length = FIG_WIDTH
         # store the shots tuples as Shot object for processing. If tuple is 2D assume the 3rd value 'isGoal' is False.
         home_shots = [Shot(ho[0], ho[1], False, (ho[2] if len(ho) == 3 else False)) for ho in home_scores]
         away_shots = [Shot(aw[0], aw[1], True, (aw[2] if len(aw) == 3 else False)) for aw in away_scores]
@@ -110,7 +112,7 @@ class XGBars:
                 print(f"The figure is saved as `{new_file_path}`,"
                       f"since the provided path `{saveto}` doesn't contain the file name and its extension")
                 saveto = new_file_path
-            plt.savefig(saveto)
+            plt.savefig(saveto, transparent=True)
             print(f"File `{saveto}` has been saved sucessfully")
         if show:
             plt.show()
@@ -134,10 +136,10 @@ class XGBars:
         circle_radius = self.bars_width + height / 10
         circle_outline_radius = circle_radius * 1.5
         if isAway:
-            circle_y_position = 0.5 - height - 0.05
+            circle_y_position = 0.5 - height + 0.3
             height = -1 * height
         else:
-            circle_y_position = 0.5 + height + 0.05
+            circle_y_position = 0.5 + height - 0.3
 
         # draw the bar
         bar = Rectangle(xy=(bar_x_position, bar_y_position), width=self.bars_width, height=height, fc=color)
@@ -167,7 +169,7 @@ class XGBars:
             if minute % 45 == 0:
                 tick_height = self.timeline_height * 12
                 tick_width = (self.bars_width / 5.0) * 2
-                tick_y_position = timeline_y_position - ((tick_height - self.timeline_height)/2.0)
+                tick_y_position = timeline_y_position - ((tick_height - self.timeline_height) / 2.0)
                 mins_tick = Rectangle(xy=(tick_x_position, tick_y_position),
                                       width=tick_width, height=tick_height, fc=ticks_color)
                 self._ax.add_patch(mins_tick)
@@ -175,7 +177,7 @@ class XGBars:
             elif minute % 15 == 0:
                 tick_height = self.timeline_height * 8.0
                 tick_width = self.bars_width / 5.0
-                tick_y_position = timeline_y_position - ((tick_height - self.timeline_height)/2.0)
+                tick_y_position = timeline_y_position - ((tick_height - self.timeline_height) / 2.0)
                 mins_tick = Rectangle(xy=(tick_x_position, tick_y_position),
                                       width=tick_width, height=tick_height,
                                       fc=ticks_color)
@@ -300,6 +302,6 @@ if __name__ == '__main__':
 
     myXGBars3 = XGBars(
         home_scores=[(0, 0.4), (11, 0.23), (15, 0.11), (38, 0.4), (60, 0.8, True), (72, 0.18), (75, 0.30), (89, 0.39)],
-        away_scores=[(21, 0.54, True), (56, 0.6), (49, 0.15), (87, 0.39), (80, 0.14)],
-        saveto="./myFig.png", goals_outlined=True
+        away_scores=[(21, 0.54, True), (56, 0.6), (49, 0.15), (87, 0.39), (80, 0.14), (67, 0.11, True)],
+        saveto="./myFig.png"
     )
