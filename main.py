@@ -44,7 +44,7 @@ class XGBars:
                  match_time: int = 90, timeline_color: tuple = (0.0, 0.0, 0.0),
                  timeline_ticks_color: tuple = (0.0, 0.0, 0.0), timeline_height: float = 0.08,
                  bars_width: float = 0.5, bars_height: float = 2.8, coloring_mode: str = 'linear',
-                 goals_outlined: bool = True, show: bool = True, saveto: str = None):
+                 goals_outlined: str = 'same', show: bool = True, saveto: str = None):
         """
         :param home_scores: a list of 3D or 4D Tuples of the form (minute, xG, isGoal) of the home team. Where:
         - 'minute' is the time of when the shot was taken.
@@ -60,8 +60,8 @@ class XGBars:
         :param bars_height: the height of the xG bars. Defaults to 1.0
         :param coloring_mode: how the darkness of the bars increase as the xG increases. Set to 'linear' by default.
         valid values are: ['linear', 'quad', 'cubic', 'sqrt'].
-        :param goals_outlined: if True, the outline of the goals circles will have the same color as the bars. Otherwise
-        the outlines will be white in color.
+        :param goals_outlined: how the goals circles will be outlined. Valid values are ['same', 'white']. Set to 'same'
+        by default (outlines have the same color as the xG bar).
         :param show: if True (default), the figure will be displayed in a pop-up window.
         :param saveto: the path where the figure will be saved. Defaults to 'None' (do not save the figure). Save as
         .PNG if you want the background to be transparent.
@@ -94,6 +94,8 @@ class XGBars:
                coloring_mode == "sqrt" or coloring_mode == "quad", \
                "coloring_mode must be one of those values: ['linear', 'cubic', 'sqrt', 'quad']"
         assert bars_width > 0, "The xG bars' width cannot be a 0 or negative number"
+        assert goals_outlined in ['same', 'white'], "Invalid 'goals_outlined' parameter, must be one of those values:" \
+                                                    " ['same', 'white']"
 
         timeline_length = FIG_WIDTH
         # store the shots tuples as Shot object for processing. If tuple is 2D assume the 3rd value 'isGoal' is False.
@@ -125,7 +127,7 @@ class XGBars:
             plt.close()
 
     def _draw_xg_bar(self, minute: int, color: tuple, height: float, isAway: bool = False, isGoal: bool = False,
-                     goals_outlined: bool = True):
+                     goals_outlined: str = 'same'):
         """
         Draw a single xG bar along the timeline axis. If the xG results in a goal, a circle will also be drawn on the
         bar to indicate a goal. Away team is plotted under the timeline while the home team is plotted over it.
@@ -152,10 +154,10 @@ class XGBars:
 
         # if goal, draw a black circle outlined in white or same color as the xg bar
         if isGoal:
-            if goals_outlined:
+            if goals_outlined == 'same':
                 circle_radius = circle_radius / 1.5
                 circle_outline_radius = circle_radius + self.bars_width
-            else:
+            elif goals_outlined == 'white':
                 color = 'white'
             goal = Circle(xy=(circle_x_position, circle_y_position), radius=circle_radius, fc='black')
             goal_outline = Circle(xy=(circle_x_position, circle_y_position), radius=circle_outline_radius, fc=color)
@@ -202,7 +204,7 @@ class XGBars:
                        timeline_ticks_color: Tuple[float, float, float],
                        timeline_length: float,
                        bars_height: float,
-                       goals_outlined: bool):
+                       goals_outlined: str):
         """
         Draw the xG Bars and timeline for an entire list of expected goals data.
         :param shots_list: A list of 'Shot' objects in which the attributes:
@@ -308,5 +310,5 @@ if __name__ == '__main__':
     myXGBars3 = XGBars(
         home_scores=[(0, 0.4), (11, 0.23), (15, 0.11), (38, 0.4), (60, 0.8, True), (72, 0.18), (75, 0.30), (89, 0.39)],
         away_scores=[(21, 0.54, True), (56, 0.6), (49, 0.15), (87, 0.39), (80, 0.14), (67, 0.11, True)],
-        saveto="./myFig.png", goals_outlined=False
+        saveto="./myFig.png"
     )
