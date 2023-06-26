@@ -143,10 +143,10 @@ class XGBars:
         circle_radius = self.bars_width + height / 10
         circle_outline_radius = circle_radius * 1.5
         if isAway:
-            circle_y_position = 0.5 - height + 0.3
+            circle_y_position = 0.5 - height
             height = -1 * height
         else:
-            circle_y_position = 0.5 + height - 0.3
+            circle_y_position = 0.5 + height
 
         # draw the bar
         bar = Rectangle(xy=(bar_x_position, bar_y_position), width=self.bars_width, height=height, fc=color)
@@ -310,5 +310,6 @@ if __name__ == '__main__':
     myXGBars3 = XGBars(
         home_scores=[(0, 0.4), (11, 0.23), (15, 0.11), (38, 0.4), (60, 0.8, True), (72, 0.18), (75, 0.30), (89, 0.39)],
         away_scores=[(21, 0.54, True), (56, 0.6), (49, 0.15), (87, 0.39), (80, 0.14), (67, 0.11, True)],
-        saveto="./myFig.png"
+        goals_outlined='white',
+        saveto='./myFig.png'
     )
