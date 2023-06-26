@@ -44,7 +44,7 @@ class XGBars:
                  match_time: int = 90, timeline_color: tuple = (0.0, 0.0, 0.0),
                  timeline_ticks_color: tuple = (0.0, 0.0, 0.0), timeline_height: float = 0.08,
                  bars_width: float = 0.5, bars_height: float = 2.8, coloring_mode: str = 'linear',
-                 goals_outlined: str = 'same', show: bool = True, saveto: str = None):
+                 goals_outlined: str = 'same', has_serif: bool = True, show: bool = True, saveto: str = None):
         """
         :param home_scores: a list of 3D or 4D Tuples of the form (minute, xG, isGoal) of the home team. Where:
         - 'minute' is the time of when the shot was taken.
@@ -62,6 +62,7 @@ class XGBars:
         valid values are: ['linear', 'quad', 'cubic', 'sqrt'].
         :param goals_outlined: how the goals circles will be outlined. Valid values are ['same', 'white']. Set to 'same'
         by default (outlines have the same color as the xG bar).
+        :param has_serif: if True, the white outlines around each goal circle will have a serif from the bar.
         :param show: if True (default), the figure will be displayed in a pop-up window.
         :param saveto: the path where the figure will be saved. Defaults to 'None' (do not save the figure). Save as
         .PNG if you want the background to be transparent.
@@ -108,7 +109,8 @@ class XGBars:
                             timeline_ticks_color=timeline_ticks_color,
                             timeline_length=timeline_length,
                             bars_height=bars_height,
-                            goals_outlined=goals_outlined)
+                            goals_outlined=goals_outlined,
+                            has_serif=has_serif)
 
         if saveto is not None:
             assert os.path.isdir(os.path.dirname(saveto)), f"The provided file path {saveto} doesn't exist"
@@ -126,8 +128,8 @@ class XGBars:
         else:
             plt.close()
 
-    def _draw_xg_bar(self, minute: int, color: tuple, height: float, isAway: bool = False, isGoal: bool = False,
-                     goals_outlined: str = 'same'):
+    def _draw_xg_bar(self, minute: int, color: tuple, height: float, isAway: bool, isGoal: bool,
+                     goals_outlined: str, has_serif: bool):
         """
         Draw a single xG bar along the timeline axis. If the xG results in a goal, a circle will also be drawn on the
         bar to indicate a goal. Away team is plotted under the timeline while the home team is plotted over it.
@@ -142,11 +144,12 @@ class XGBars:
         circle_x_position = minute + self.bars_width / 2
         circle_radius = self.bars_width + height / 10
         circle_outline_radius = circle_radius * 1.5
+
         if isAway:
-            circle_y_position = 0.5 - height
+            circle_y_position = 0.5 - height  # below the timeline axis
             height = -1 * height
         else:
-            circle_y_position = 0.5 + height
+            circle_y_position = 0.5 + height  # above the timeline axis
 
         # draw the bar
         bar = Rectangle(xy=(bar_x_position, bar_y_position), width=self.bars_width, height=height, fc=color)
@@ -154,13 +157,21 @@ class XGBars:
 
         # if goal, draw a black circle outlined in white or same color as the xg bar
         if isGoal:
+            outline_color = color
             if goals_outlined == 'same':
                 circle_radius = circle_radius / 1.5
                 circle_outline_radius = circle_radius + self.bars_width
             elif goals_outlined == 'white':
-                color = 'white'
+                outline_color = 'white'
+
+            if has_serif and goals_outlined == 'white':  # draw serifs around the outline goal circle
+                serif_radius = circle_outline_radius / 2
+                serif_y_position = height + 1.25 if isAway else height - 0.25
+                serif = Circle(xy=(circle_x_position, serif_y_position), radius=serif_radius, fc=color)
+                self._ax.add_patch(serif)
+
             goal = Circle(xy=(circle_x_position, circle_y_position), radius=circle_radius, fc='black')
-            goal_outline = Circle(xy=(circle_x_position, circle_y_position), radius=circle_outline_radius, fc=color)
+            goal_outline = Circle(xy=(circle_x_position, circle_y_position), radius=circle_outline_radius, fc=outline_color)
             self._ax.add_patch(goal_outline)
             self._ax.add_patch(goal)
 
@@ -204,7 +215,8 @@ class XGBars:
                        timeline_ticks_color: Tuple[float, float, float],
                        timeline_length: float,
                        bars_height: float,
-                       goals_outlined: str):
+                       goals_outlined: str,
+                       has_serif: bool):
         """
         Draw the xG Bars and timeline for an entire list of expected goals data.
         :param shots_list: A list of 'Shot' objects in which the attributes:
@@ -229,7 +241,8 @@ class XGBars:
                 goals.append(Shot(time, xG, isAway, isGoal))
             else:
                 self._draw_xg_bar(minute=time, color=self.get_rgb_from_xg(xG),
-                                  isAway=isAway, isGoal=isGoal, height=bars_height)
+                                  isAway=isAway, isGoal=isGoal, height=bars_height,
+                                  has_serif=has_serif, goals_outlined=goals_outlined)
 
         # draw goal-scoring shots at the end to be displayed on front
         for goal in goals:
@@ -238,11 +251,14 @@ class XGBars:
                               isAway=goal.isAway,
                               isGoal=goal.isGoal,
                               height=bars_height,
-                              goals_outlined=goals_outlined)
+                              goals_outlined=goals_outlined,
+                              has_serif=has_serif)
 
         self._draw_timeline(timeline_length=timeline_length,
                             axis_color=timeline_color,
                             ticks_color=timeline_ticks_color)
+
+
 
     @staticmethod
     def load_match_data(filepath):
