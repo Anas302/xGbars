@@ -1,5 +1,4 @@
 import os
-
 from matplotlib.patches import Circle, Rectangle
 from typing import List, Tuple, Union
 import matplotlib.pyplot as plt
@@ -9,7 +8,6 @@ from datetime import datetime
 
 
 # TODO:
-#   - Add bar height as a measure for xG as well.
 #   - option to display the xG above
 #   - package up the code as a PyPi package
 #   - Add different color spectrums option
@@ -56,8 +54,15 @@ class XGBars:
         :param away_scores: same as 'home_scores' parameter except the Tuples are for the away team.
         :param match_time: the time of the match for which the xG has been recorded.
         :param timeline_color: the color of the timeline (x-axis). Set to black by default.
+        :param timeline_ticks_color: the color of the timeline ticks. Set to black by default.
+        :param timeline_height: the height of the timeline (x-axis).
         :param bars_width: the width of all xG bars. Defaults to 0.2
         :param bars_height: the height of the xG bars. Defaults to 1.0
+        :param coloring_mode: how the darkness of the bars increase as the xG increases. Set to 'linear' by default.
+        valid values are: ['linear', 'quad', 'cubic', 'sqrt'].
+        :param goals_outlined: if True, the outline of the goals circles will have the same color as the bars. Otherwise
+        the outlines will be white in color.
+        :param show: if True (default), the figure will be displayed in a pop-up window.
         :param saveto: the path where the figure will be saved. Defaults to 'None' (do not save the figure). Save as
         .PNG if you want the background to be transparent.
         Example of a valid file path: `C:/Users/xx/Desktop/myFig.png` or `./myFig.jpg`.
@@ -303,5 +308,5 @@ if __name__ == '__main__':
     myXGBars3 = XGBars(
         home_scores=[(0, 0.4), (11, 0.23), (15, 0.11), (38, 0.4), (60, 0.8, True), (72, 0.18), (75, 0.30), (89, 0.39)],
         away_scores=[(21, 0.54, True), (56, 0.6), (49, 0.15), (87, 0.39), (80, 0.14), (67, 0.11, True)],
-        saveto="./myFig.png"
+        saveto="./myFig.png", goals_outlined=False
     )
