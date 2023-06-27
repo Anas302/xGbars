@@ -2,9 +2,10 @@ import os
 from matplotlib.patches import Circle, Rectangle
 from typing import List, Tuple, Union
 import matplotlib.pyplot as plt
-import pandas as pd
 import math
 from datetime import datetime
+from PIL import Image
+import numpy as np
 
 
 # TODO:
@@ -45,7 +46,7 @@ class XGBars:
                  timeline_ticks_color: tuple = (0.0, 0.0, 0.0), timeline_ticks_type: str = 'bar',
                  timeline_height: float = 0.25, bars_width: float = 0.5, bars_height: float = 2.8,
                  coloring_mode: str = 'linear', goals_outlined: str = 'same', has_serif: bool = True,
-                 show: bool = True, saveto: str = None):
+                 dynamic_width: bool = False, show: bool = True, saveto: str = None):
         """
         :param home_scores: a list of 3D or 4D Tuples of the form (minute, xG, isGoal) of the home team. Where:
             - 'minute' is the time of when the shot was taken.
@@ -115,26 +116,33 @@ class XGBars:
                             timeline_length=timeline_length,
                             bars_height=bars_height,
                             goals_outlined=goals_outlined,
-                            has_serif=has_serif)
+                            has_serif=has_serif,
+                            dynamic_width=dynamic_width)
 
         if saveto is not None:
             assert os.path.isdir(os.path.dirname(saveto)), f"The provided file path {saveto} doesn't exist"
             directory, file_name = os.path.split(saveto)
             filename, extension = os.path.splitext(file_name)
+            # if the provided path doesn't contain the filename and extension, save file as png with current time name
             if filename == '' or extension == '':
                 new_file_path = os.path.join(f"{saveto}", f"{datetime.now().strftime('%H-%M-%S-%f')}.png")
                 print(f"The figure is saved as `{new_file_path}`,"
                       f"since the provided path `{saveto}` doesn't contain the file name and its extension")
                 saveto = new_file_path
-            plt.savefig(saveto, transparent=True)
+            # if the file is saveed as a png, remove any white background or objects from image.
+            elif extension.lower() == '.png':
+                plt.savefig(saveto, transparent=True)
+                self.remove_white_and_make_transparent(saveto, saveto)
+            else:
+                plt.savefig(saveto)
             print(f"File `{saveto}` has been saved sucessfully")
         if show:
             plt.show()
         else:
             plt.close()
 
-    def _draw_xg_bar(self, minute: int, color: tuple, height: float, isAway: bool, isGoal: bool,
-                     goals_outlined: str, has_serif: bool):
+    def _draw_xg_bar(self, width: float, minute: int, color: tuple, height: float, isAway: bool,
+                     isGoal: bool, goals_outlined: str, has_serif: bool):
         """
         Draw a single xG bar along the timeline axis. If the xG results in a goal, a circle will also be drawn on the
         bar to indicate a goal. Away team is plotted under the timeline while the home team is plotted over it.
@@ -146,10 +154,9 @@ class XGBars:
         minute *= (self.bars_width / 0.1)
         bar_x_position = minute
         bar_y_position = 0.5 - self.timeline_height / 2
-        circle_x_position = minute + self.bars_width / 2
+        circle_x_position = minute + width / 2
         circle_radius = self.bars_width + height / 10
         circle_outline_radius = circle_radius * 1.5
-
         if isAway:
             circle_y_position = 0.5 - height  # below the timeline axis
             height = -1 * height
@@ -157,7 +164,7 @@ class XGBars:
             circle_y_position = 0.5 + height  # above the timeline axis
 
         # draw the bar
-        bar = Rectangle(xy=(bar_x_position, bar_y_position), width=self.bars_width, height=height, fc=color)
+        bar = Rectangle(xy=(bar_x_position, bar_y_position), width=width, height=height, fc=color)
         self._ax.add_patch(bar)
 
         # if goal, draw a black circle outlined in white or same color as the xg bar
@@ -165,13 +172,13 @@ class XGBars:
             outline_color = color
             if goals_outlined == 'same':
                 circle_radius = circle_radius / 1.5
-                circle_outline_radius = circle_radius + self.bars_width
+                circle_outline_radius = circle_radius + width
             elif goals_outlined == 'white':
                 outline_color = 'white'
 
             if has_serif and goals_outlined == 'white':  # draw serifs around the outline goal circle
-                serif_radius = circle_outline_radius / 2
-                serif_y_position = height + 1.25 if isAway else height - 0.25
+                serif_radius = circle_radius
+                serif_y_position = (height + 1.1) if isAway else height - 0.1
                 serif = Circle(xy=(circle_x_position, serif_y_position), radius=serif_radius, fc=color)
                 self._ax.add_patch(serif)
 
@@ -235,7 +242,8 @@ class XGBars:
                        bars_height: float,
                        goals_outlined: str,
                        has_serif: bool,
-                       timeline_ticks_type: str):
+                       timeline_ticks_type: str,
+                       dynamic_width: bool):
         """
         Draw the xG Bars and timeline for an entire list of expected goals data.
         :param shots_list: A list of 'Shot' objects in which the attributes:
@@ -259,13 +267,15 @@ class XGBars:
             if isGoal:
                 goals.append(Shot(time, xG, isAway, isGoal))
             else:
-                self._draw_xg_bar(minute=time, color=self.get_rgb_from_xg(xG),
+                self._draw_xg_bar(width=(self.bars_width + xG/2.0) if dynamic_width else self.bars_width,
+                                  minute=time, color=self.get_rgb_from_xg(xG),
                                   isAway=isAway, isGoal=isGoal, height=bars_height,
                                   has_serif=has_serif, goals_outlined=goals_outlined)
 
         # draw goal-scoring shots at the end to be displayed on front
         for goal in goals:
             self._draw_xg_bar(minute=goal.minute,
+                              width=(self.bars_width + goal.xG/2.0) if dynamic_width else self.bars_width,
                               color=self.get_rgb_from_xg(goal.xG),
                               isAway=goal.isAway,
                               isGoal=goal.isGoal,
@@ -277,29 +287,6 @@ class XGBars:
                             axis_color=timeline_color,
                             ticks_color=timeline_ticks_color,
                             ticks_type=timeline_ticks_type)
-
-    @staticmethod
-    def load_match_data(filepath):
-        """
-        Assumes the file is a csv event data file from Wyscout containing only Shots events with the following columns:
-            - teamId
-            - xG
-            - eventSec
-        :return: the time in minutes (index) of each shot and its respective xG, for two teams.
-        """
-        match = pd.read_csv(filepath)
-        team1 = match[match['teamId'] == match['teamId'].unique()[0]].copy()
-        team2 = match[match['teamId'] == match['teamId'].unique()[1]].copy()
-
-        team1['eventMin'] = team1['eventSec'].apply(lambda row: round(row / 60))
-        team2['eventMin'] = team2['eventSec'].apply(lambda row: round(row / 60))
-
-        team1_xG, team1_mins = list(team1.groupby('eventMin')['xG'].mean()), team1.groupby('eventMin')[
-            'xG'].mean().index
-        team2_xG, team2_mins = list(team2.groupby('eventMin')['xG'].mean()), team2.groupby('eventMin')[
-            'xG'].mean().index
-
-        return team1_mins, team1_xG, team2_mins, team2_xG
 
     @staticmethod
     def get_rgb_from_xg(xG, mode='linear'):
@@ -334,17 +321,38 @@ class XGBars:
             raise ValueError("The provided mode arguement is incorrect. 'mode' should be in ['linear', 'quad', 'sqrt']")
         return red, green, blue
 
+    @staticmethod
+    def remove_white_and_make_transparent(image_path, saveto):
+        # Open the image
+        image = Image.open(image_path)
+
+        # Convert the image to RGBA mode
+        image = image.convert("RGBA")
+
+        # Convert the image to a NumPy array
+        np_image = np.array(image)
+
+        # Calculate the maximum allowed RGB value for white
+        max_white = (255, 255, 255)
+
+        # Create a mask of white pixels
+        white_mask = np.all(np_image[:, :, :3] >= max_white, axis=-1)
+
+        # Set the alpha channel of white pixels to 0 (transparent)
+        np_image[white_mask] = [255, 255, 255, 0]
+
+        # Convert the NumPy array back to an image
+        result_image = Image.fromarray(np_image)
+
+        # Save the modified image
+        result_image.save(saveto)
+
 
 if __name__ == '__main__':
-    # test on real data for England events over all the matches in Wyscout dataset.
-    team1_mins, team1_xG, team2_mins, team2_xG = XGBars.load_match_data(r"C:\Users\anas3\Desktop\ETH\xG-data.csv")
-    results = [(min1, xG1, False) for min1, xG1 in zip(team1_mins, team1_xG)]
-    results.extend([(min2, xG2, True) for min2, xG2 in zip(team2_mins, team2_xG)])
-
-    myXGBars3 = XGBars(
+    myXGBars = XGBars(
         home_scores=[(0, 0.4), (11, 0.23), (15, 0.11), (38, 0.4), (60, 0.8, True), (72, 0.18), (75, 0.30), (89, 0.39)],
         away_scores=[(21, 0.54, True), (56, 0.6), (49, 0.15), (87, 0.39), (80, 0.14), (67, 0.11, True)],
-        goals_outlined='white',
         saveto='./myFig.png',
-        timeline_ticks_type='gap'
+        dynamic_width=True,
+        goals_outlined='white'
     )
