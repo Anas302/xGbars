@@ -42,19 +42,22 @@ class XGBars:
     def __init__(self, home_scores: List[Union[Tuple[int, float, bool], Tuple[int, float]]] = None,
                  away_scores: List[Union[Tuple[int, float, bool], Tuple[int, float]]] = None,
                  match_time: int = 90, timeline_color: tuple = (0.0, 0.0, 0.0),
-                 timeline_ticks_color: tuple = (0.0, 0.0, 0.0), timeline_height: float = 0.08,
-                 bars_width: float = 0.5, bars_height: float = 2.8, coloring_mode: str = 'linear',
-                 goals_outlined: str = 'same', has_serif: bool = True, show: bool = True, saveto: str = None):
+                 timeline_ticks_color: tuple = (0.0, 0.0, 0.0), timeline_ticks_type: str = 'bar',
+                 timeline_height: float = 0.25, bars_width: float = 0.5, bars_height: float = 2.8,
+                 coloring_mode: str = 'linear', goals_outlined: str = 'same', has_serif: bool = True,
+                 show: bool = True, saveto: str = None):
         """
         :param home_scores: a list of 3D or 4D Tuples of the form (minute, xG, isGoal) of the home team. Where:
-        - 'minute' is the time of when the shot was taken.
-        - 'xG' is the xG score of the shot.
-        - 'isGoal' (optional) whether the shot resulted in a
-          goal or not, defaults to False (no goal).
+            - 'minute' is the time of when the shot was taken.
+            - 'xG' is the xG score of the shot.
+            - 'isGoal' (optional) whether the shot resulted in a
+              goal or not, defaults to False (no goal).
         :param away_scores: same as 'home_scores' parameter except the Tuples are for the away team.
         :param match_time: the time of the match for which the xG has been recorded.
         :param timeline_color: the color of the timeline (x-axis). Set to black by default.
         :param timeline_ticks_color: the color of the timeline ticks. Set to black by default.
+        :param timeline_ticks_type: the type of ticks drawn on the timeline. Can be one of following values:
+        ['bar', 'hole', 'gap']. Set to 'bar' by default.
         :param timeline_height: the height of the timeline (x-axis).
         :param bars_width: the width of all xG bars. Defaults to 0.2
         :param bars_height: the height of the xG bars. Defaults to 1.0
@@ -91,12 +94,13 @@ class XGBars:
         assert self.match_time > 0, "Match time cannot be 0 or a negative number"
         assert self.timeline_height > 0, "The timeline cannot have a height of 0 or negative number"
         assert bars_height > 0, "The xG bars' heights cannot be a 0 or negative number"
-        assert coloring_mode == "linear" or coloring_mode == "cubic" or \
-               coloring_mode == "sqrt" or coloring_mode == "quad", \
-               "coloring_mode must be one of those values: ['linear', 'cubic', 'sqrt', 'quad']"
+        assert coloring_mode in ["linear", "cubic", "sqrt", "quad"], \
+            "coloring_mode must be one of those values: ['linear', 'cubic', 'sqrt', 'quad']"
         assert bars_width > 0, "The xG bars' width cannot be a 0 or negative number"
         assert goals_outlined in ['same', 'white'], "Invalid 'goals_outlined' parameter, must be one of those values:" \
                                                     " ['same', 'white']"
+        assert timeline_ticks_type in ['bar', 'hole', 'gap'], "Invalid 'timeline_ticks_type' parameter, must be one " \
+                                                              "of those values: ['bar', 'hole', 'gap']"
 
         timeline_length = FIG_WIDTH
         # store the shots tuples as Shot object for processing. If tuple is 2D assume the 3rd value 'isGoal' is False.
@@ -107,6 +111,7 @@ class XGBars:
         self._create_xGBars(shots_list=all_shots,
                             timeline_color=timeline_color,
                             timeline_ticks_color=timeline_ticks_color,
+                            timeline_ticks_type=timeline_ticks_type,
                             timeline_length=timeline_length,
                             bars_height=bars_height,
                             goals_outlined=goals_outlined,
@@ -171,44 +176,57 @@ class XGBars:
                 self._ax.add_patch(serif)
 
             goal = Circle(xy=(circle_x_position, circle_y_position), radius=circle_radius, fc='black')
-            goal_outline = Circle(xy=(circle_x_position, circle_y_position), radius=circle_outline_radius, fc=outline_color)
+            goal_outline = Circle(xy=(circle_x_position, circle_y_position), radius=circle_outline_radius,
+                                  fc=outline_color)
             self._ax.add_patch(goal_outline)
             self._ax.add_patch(goal)
 
-    def _draw_timeline(self, timeline_length: float,
+    def _draw_timeline(self, length: float,
                        axis_color: Tuple[float, float, float],
-                       ticks_color: Tuple[float, float, float]):
+                       ticks_color: Tuple[float, float, float],
+                       ticks_type: str):
 
+        # draw the timeline (x-axis) line
         timeline_y_position = 0.5 - self.timeline_height / 2
+        timeline = Rectangle(xy=(0, timeline_y_position), width=length,
+                             height=self.timeline_height, fc=axis_color)
+        self._ax.add_patch(timeline)
+
         for minute in range(self.match_time + 2):
             tick_x_position = (minute / 10) * (self.bars_width / 0.1)
 
-            # draw tick for every 15 minute. And a bigger tick for minute 45
-            if minute % 45 == 0:
-                tick_height = self.timeline_height * 12
-                tick_width = (self.bars_width / 5.0) * 2
-                tick_y_position = timeline_y_position - ((tick_height - self.timeline_height) / 2.0)
-                mins_tick = Rectangle(xy=(tick_x_position, tick_y_position),
-                                      width=tick_width, height=tick_height, fc=ticks_color)
-                self._ax.add_patch(mins_tick)
+            # draw tick for every 15 minute. And a bigger tick for minute 45 (half-time).
+            if ticks_type == "bar":
+                if minute % 15 == 0:
+                    if minute % 45 == 0:
+                        tick_height = self.timeline_height + 1
+                        tick_width = (self.bars_width / 5.0) * 2
+                        tick_y_position = timeline_y_position - ((tick_height - self.timeline_height) / 2.0)
+                        mins_tick = Rectangle(xy=(tick_x_position, tick_y_position),
+                                              width=tick_width, height=tick_height, fc=ticks_color)
+                    else:
+                        tick_height = self.timeline_height + 0.5
+                        tick_width = self.bars_width / 5.0
+                        tick_y_position = timeline_y_position - ((tick_height - self.timeline_height) / 2.0)
+                        mins_tick = Rectangle(xy=(tick_x_position, tick_y_position),
+                                              width=tick_width, height=tick_height, fc=ticks_color)
+                    self._ax.add_patch(mins_tick)
 
-            elif minute % 15 == 0:
-                tick_height = self.timeline_height * 8.0
-                tick_width = self.bars_width / 5.0
-                tick_y_position = timeline_y_position - ((tick_height - self.timeline_height) / 2.0)
-                mins_tick = Rectangle(xy=(tick_x_position, tick_y_position),
-                                      width=tick_width, height=tick_height,
-                                      fc=ticks_color)
-                self._ax.add_patch(mins_tick)
-            # else:
-            #     mins_tick = Rectangle(xy=(tick_x_position, tick_y_position),
-            #                           width=tick_width, height=tick_height,
-            #                           fc=ticks_color)
+            elif ticks_type == "hole":
+                if minute % 15 == 0 and minute != 0 and minute != 90:
+                    tick_radius = self.timeline_height / 2.0
+                    tick_y_position = 0.5
+                    mins_tick = Circle(xy=(tick_x_position, tick_y_position), radius=tick_radius, fc='white')
+                    self._ax.add_patch(mins_tick)
 
-        # time axis
-        timeline = Rectangle(xy=(0, timeline_y_position), width=timeline_length,
-                             height=self.timeline_height, fc=axis_color)
-        self._ax.add_patch(timeline)
+            else:  # ticks_type = 'gap'
+                if minute % 15 == 0 and minute != 0 and minute != 90:
+                    tick_width = self.bars_width if minute % 45 == 0 else self.bars_width / 3.0
+                    tick_height = self.timeline_height
+                    tick_y_position = timeline_y_position - ((tick_height - self.timeline_height) / 2.0)
+                    mins_tick = Rectangle(xy=(tick_x_position, tick_y_position),
+                                          width=tick_width, height=tick_height, fc='white')
+                    self._ax.add_patch(mins_tick)
 
     def _create_xGBars(self, shots_list: List[Shot],
                        timeline_color: Tuple[float, float, float],
@@ -216,7 +234,8 @@ class XGBars:
                        timeline_length: float,
                        bars_height: float,
                        goals_outlined: str,
-                       has_serif: bool):
+                       has_serif: bool,
+                       timeline_ticks_type: str):
         """
         Draw the xG Bars and timeline for an entire list of expected goals data.
         :param shots_list: A list of 'Shot' objects in which the attributes:
@@ -254,11 +273,10 @@ class XGBars:
                               goals_outlined=goals_outlined,
                               has_serif=has_serif)
 
-        self._draw_timeline(timeline_length=timeline_length,
+        self._draw_timeline(length=timeline_length,
                             axis_color=timeline_color,
-                            ticks_color=timeline_ticks_color)
-
-
+                            ticks_color=timeline_ticks_color,
+                            ticks_type=timeline_ticks_type)
 
     @staticmethod
     def load_match_data(filepath):
@@ -327,5 +345,6 @@ if __name__ == '__main__':
         home_scores=[(0, 0.4), (11, 0.23), (15, 0.11), (38, 0.4), (60, 0.8, True), (72, 0.18), (75, 0.30), (89, 0.39)],
         away_scores=[(21, 0.54, True), (56, 0.6), (49, 0.15), (87, 0.39), (80, 0.14), (67, 0.11, True)],
         goals_outlined='white',
-        saveto='./myFig.png'
+        saveto='./myFig.png',
+        timeline_ticks_type='gap'
     )
