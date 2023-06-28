@@ -1,5 +1,6 @@
 import os
-from matplotlib.patches import Circle, Rectangle
+from matplotlib.patches import Circle, Rectangle, PathPatch
+from matplotlib.path import Path
 from typing import List, Tuple, Union
 import matplotlib.pyplot as plt
 import math
@@ -12,6 +13,52 @@ import numpy as np
 #   - option to display the xG above
 #   - package up the code as a PyPi package
 #   - Add different color spectrums option
+
+
+class Serif(PathPatch):
+    def __init__(self, xy, width, height, inverted=False,  **kwargs):
+        codes = self._get_codes()
+        self._x, self._y = xy
+        self._w, self._h = width, height
+        self._x -= self._w/4
+        if inverted:
+            verts = self._get_inverted_verts()
+            path = Path(verts, codes)
+        else:
+            verts = self._get_verts()
+            path = Path(verts, codes)
+        super().__init__(path, edgecolor='none', **kwargs)
+
+    def _get_verts(self):
+        # Generate the vertices of the Serif shape
+        verts = [
+            (self._x + self._w/4, self._y),
+            (self._x + self._w*3/4, self._y),
+            (self._x + self._w*3/4, self._y + self._h*3/5),
+            (self._x + self._w, self._y + self._h*4/5),
+            (self._x + self._w*9/10, self._y + self._h),
+            (self._x + self._w/2, self._y + self._h*3/5),
+            (self._x + self._w/10, self._y + self._h),
+            (self._x, self._y + self._h*4/5),
+            (self._x + self._w*1/4, self._y + self._h*3/5),
+            (self._x + self._w / 4, self._y)
+        ]
+        return verts
+
+    @staticmethod
+    def _get_codes():
+        codes = [Path.MOVETO,
+                 Path.LINETO,
+                 Path.CURVE3,
+                 Path.CURVE3,
+                 Path.LINETO,
+                 Path.CURVE3,
+                 Path.CURVE3,
+                 Path.LINETO,
+                 Path.CURVE3,
+                 Path.CURVE3]
+        return codes
+
 
 
 class Shot:
@@ -45,8 +92,8 @@ class XGBars:
                  match_time: int = 90, timeline_color: tuple = (0.0, 0.0, 0.0),
                  timeline_ticks_color: tuple = (0.0, 0.0, 0.0), timeline_ticks_type: str = 'bar',
                  timeline_height: float = 0.25, bars_width: float = 0.5, bars_height: float = 2.8,
-                 coloring_mode: str = 'linear', goals_outlined: str = 'same', has_serif: bool = True,
-                 dynamic_width: bool = False, show: bool = True, saveto: str = None):
+                 coloring_mode: str = 'linear', goals_outlined: str = 'white', has_serif: bool = True,
+                 dynamic_width: bool = True, show: bool = True, saveto: str = None):
         """
         :param home_scores: a list of 3D or 4D Tuples of the form (minute, xG, isGoal) of the home team. Where:
             - 'minute' is the time of when the shot was taken.
@@ -67,6 +114,7 @@ class XGBars:
         :param goals_outlined: how the goals circles will be outlined. Valid values are ['same', 'white']. Set to 'same'
         by default (outlines have the same color as the xG bar).
         :param has_serif: if True, the white outlines around each goal circle will have a serif from the bar.
+        :param dynamic_width: if True, the width of each bar will increase by xG/2.
         :param show: if True (default), the figure will be displayed in a pop-up window.
         :param saveto: the path where the figure will be saved. Defaults to 'None' (do not save the figure). Save as
         .PNG if you want the background to be transparent.
@@ -92,6 +140,7 @@ class XGBars:
         self.match_time = match_time
         self.timeline_height = timeline_height
 
+        # check the validity of all input data
         assert self.match_time > 0, "Match time cannot be 0 or a negative number"
         assert self.timeline_height > 0, "The timeline cannot have a height of 0 or negative number"
         assert bars_height > 0, "The xG bars' heights cannot be a 0 or negative number"
@@ -104,6 +153,7 @@ class XGBars:
                                                               "of those values: ['bar', 'hole', 'gap']"
 
         timeline_length = FIG_WIDTH
+
         # store the shots tuples as Shot object for processing. If tuple is 2D assume the 3rd value 'isGoal' is False.
         home_shots = [Shot(ho[0], ho[1], False, (ho[2] if len(ho) == 3 else False)) for ho in home_scores]
         away_shots = [Shot(aw[0], aw[1], True, (aw[2] if len(aw) == 3 else False)) for aw in away_scores]
@@ -119,6 +169,7 @@ class XGBars:
                             has_serif=has_serif,
                             dynamic_width=dynamic_width)
 
+        # save the figure and/or display it on screen
         if saveto is not None:
             assert os.path.isdir(os.path.dirname(saveto)), f"The provided file path {saveto} doesn't exist"
             directory, file_name = os.path.split(saveto)
@@ -132,7 +183,7 @@ class XGBars:
             # if the file is saveed as a png, remove any white background or objects from image.
             elif extension.lower() == '.png':
                 plt.savefig(saveto, transparent=True)
-                self.remove_white_and_make_transparent(saveto, saveto)
+                self.remove_white_from_image(saveto, saveto)
             else:
                 plt.savefig(saveto)
             print(f"File `{saveto}` has been saved sucessfully")
@@ -149,6 +200,9 @@ class XGBars:
         :param minute: the time in minutes in which the xG is to be plotted. The time must be between 0 and 90 minutes.
         :param isAway: whether the xG belongs to the away team or the home team.
         :param isGoal: whether the shot resulted in a goal or not. Set to False by default.
+        :param goals_outlined: the type of outline that will be drawn around each goal circle. Valid values:
+        ['white', 'same']
+        :param has_serif: if True, xG bars with goals will have serifs on their top edges.
         """
         minute /= 10
         minute *= (self.bars_width / 0.1)
@@ -176,17 +230,18 @@ class XGBars:
             elif goals_outlined == 'white':
                 outline_color = 'white'
 
-            if has_serif and goals_outlined == 'white':  # draw serifs around the outline goal circle
-                serif_radius = circle_radius
-                serif_y_position = (height + 1.1) if isAway else height - 0.1
-                serif = Circle(xy=(circle_x_position, serif_y_position), radius=serif_radius, fc=color)
-                self._ax.add_patch(serif)
-
             goal = Circle(xy=(circle_x_position, circle_y_position), radius=circle_radius, fc='black')
             goal_outline = Circle(xy=(circle_x_position, circle_y_position), radius=circle_outline_radius,
                                   fc=outline_color)
             self._ax.add_patch(goal_outline)
             self._ax.add_patch(goal)
+
+            if has_serif and goals_outlined == 'white':  # draw serifs around the outline goal circle
+                serif_width = width*2
+                serif_height = -0.8 if isAway else 0.8
+                serif_y_position = height + 2.2 if isAway else height - 1.2
+                serif = Serif(xy=(bar_x_position, serif_y_position), width=serif_width, height=serif_height, fc=color)
+                self._ax.add_patch(serif)
 
     def _draw_timeline(self, length: float,
                        axis_color: Tuple[float, float, float],
@@ -267,7 +322,7 @@ class XGBars:
             if isGoal:
                 goals.append(Shot(time, xG, isAway, isGoal))
             else:
-                self._draw_xg_bar(width=(self.bars_width + xG/2.0) if dynamic_width else self.bars_width,
+                self._draw_xg_bar(width=(self.bars_width + xG / 2.0) if dynamic_width else self.bars_width,
                                   minute=time, color=self.get_rgb_from_xg(xG),
                                   isAway=isAway, isGoal=isGoal, height=bars_height,
                                   has_serif=has_serif, goals_outlined=goals_outlined)
@@ -275,7 +330,7 @@ class XGBars:
         # draw goal-scoring shots at the end to be displayed on front
         for goal in goals:
             self._draw_xg_bar(minute=goal.minute,
-                              width=(self.bars_width + goal.xG/2.0) if dynamic_width else self.bars_width,
+                              width=(self.bars_width + goal.xG / 2.0) if dynamic_width else self.bars_width,
                               color=self.get_rgb_from_xg(goal.xG),
                               isAway=goal.isAway,
                               isGoal=goal.isGoal,
@@ -322,7 +377,7 @@ class XGBars:
         return red, green, blue
 
     @staticmethod
-    def remove_white_and_make_transparent(image_path, saveto):
+    def remove_white_from_image(image_path, saveto):
         # Open the image
         image = Image.open(image_path)
 
@@ -350,9 +405,7 @@ class XGBars:
 
 if __name__ == '__main__':
     myXGBars = XGBars(
-        home_scores=[(0, 0.4), (11, 0.23), (15, 0.11), (38, 0.4), (60, 0.8, True), (72, 0.18), (75, 0.30), (89, 0.39)],
+        home_scores=[(0, 0.4), (11, 0.23, True), (15, 0.11), (38, True, 0.4), (60, 0.8, True), (72, 0.18), (75, 0.30), (89, 0.39)],
         away_scores=[(21, 0.54, True), (56, 0.6), (49, 0.15), (87, 0.39), (80, 0.14), (67, 0.11, True)],
         saveto='./myFig.png',
-        dynamic_width=True,
-        goals_outlined='white'
     )
