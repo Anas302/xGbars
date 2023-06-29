@@ -9,44 +9,29 @@ from PIL import Image
 import numpy as np
 
 
-# TODO:
-#   - option to display the xG above
-#   - package up the code as a PyPi package
-#   - Add different color spectrums option
-
-
 class Serif(PathPatch):
-    def __init__(self, xy, width, height, inverted=False,  **kwargs):
-        codes = self._get_codes()
+    def __init__(self, xy, width, height, **kwargs):
         self._x, self._y = xy
         self._w, self._h = width, height
-        self._x -= self._w/4
-        if inverted:
-            verts = self._get_inverted_verts()
-            path = Path(verts, codes)
-        else:
-            verts = self._get_verts()
-            path = Path(verts, codes)
+        self._x -= self._w / 4
+        verts, codes = self._get_verts_and_codes()
+        path = Path(verts, codes)
         super().__init__(path, edgecolor='none', **kwargs)
 
-    def _get_verts(self):
+    def _get_verts_and_codes(self):
         # Generate the vertices of the Serif shape
         verts = [
-            (self._x + self._w/4, self._y),
-            (self._x + self._w*3/4, self._y),
-            (self._x + self._w*3/4, self._y + self._h*3/5),
-            (self._x + self._w, self._y + self._h*4/5),
-            (self._x + self._w*9/10, self._y + self._h),
-            (self._x + self._w/2, self._y + self._h*3/5),
-            (self._x + self._w/10, self._y + self._h),
-            (self._x, self._y + self._h*4/5),
-            (self._x + self._w*1/4, self._y + self._h*3/5),
+            (self._x + self._w / 4, self._y),
+            (self._x + self._w * 3 / 4, self._y),
+            (self._x + self._w * 3 / 4, self._y + self._h * 3 / 5),
+            (self._x + self._w, self._y + self._h * 4 / 5),
+            (self._x + self._w * 9 / 10, self._y + self._h),
+            (self._x + self._w / 2, self._y + self._h * 3 / 5),
+            (self._x + self._w / 10, self._y + self._h),
+            (self._x, self._y + self._h * 4 / 5),
+            (self._x + self._w * 1 / 4, self._y + self._h * 3 / 5),
             (self._x + self._w / 4, self._y)
         ]
-        return verts
-
-    @staticmethod
-    def _get_codes():
         codes = [Path.MOVETO,
                  Path.LINETO,
                  Path.CURVE3,
@@ -57,8 +42,7 @@ class Serif(PathPatch):
                  Path.LINETO,
                  Path.CURVE3,
                  Path.CURVE3]
-        return codes
-
+        return verts, codes
 
 
 class Shot:
@@ -93,7 +77,8 @@ class XGBars:
                  timeline_ticks_color: tuple = (0.0, 0.0, 0.0), timeline_ticks_type: str = 'bar',
                  timeline_height: float = 0.25, bars_width: float = 0.5, bars_height: float = 2.8,
                  coloring_mode: str = 'linear', goals_outlined: str = 'white', has_serif: bool = True,
-                 dynamic_width: bool = True, show: bool = True, saveto: str = None):
+                 dynamic_width: bool = True, center_ticks: bool = False,
+                 show: bool = True, saveto: str = None):
         """
         :param home_scores: a list of 3D or 4D Tuples of the form (minute, xG, isGoal) of the home team. Where:
             - 'minute' is the time of when the shot was taken.
@@ -139,6 +124,8 @@ class XGBars:
         self.bars_width = bars_width
         self.match_time = match_time
         self.timeline_height = timeline_height
+        self.center_ticks = center_ticks
+        self.timeline_color = timeline_color
 
         # check the validity of all input data
         assert self.match_time > 0, "Match time cannot be 0 or a negative number"
@@ -167,7 +154,8 @@ class XGBars:
                             bars_height=bars_height,
                             goals_outlined=goals_outlined,
                             has_serif=has_serif,
-                            dynamic_width=dynamic_width)
+                            dynamic_width=dynamic_width
+                            )
 
         # save the figure and/or display it on screen
         if saveto is not None:
@@ -206,9 +194,9 @@ class XGBars:
         """
         minute /= 10
         minute *= (self.bars_width / 0.1)
-        bar_x_position = minute
+        bar_x_position = (minute - width/2) if self.center_ticks else minute
         bar_y_position = 0.5 - self.timeline_height / 2
-        circle_x_position = minute + width / 2
+        circle_x_position = minute if self.center_ticks else (minute + width/2)
         circle_radius = self.bars_width + height / 10
         circle_outline_radius = circle_radius * 1.5
         if isAway:
@@ -219,6 +207,11 @@ class XGBars:
 
         # draw the bar
         bar = Rectangle(xy=(bar_x_position, bar_y_position), width=width, height=height, fc=color)
+        self._ax.add_patch(bar)
+
+        # draw the underline of each bar
+        bar = Rectangle(xy=(bar_x_position, bar_y_position), width=width, height=self.timeline_height,
+                        fc=self.timeline_color)
         self._ax.add_patch(bar)
 
         # if goal, draw a black circle outlined in white or same color as the xg bar
@@ -236,8 +229,9 @@ class XGBars:
             self._ax.add_patch(goal_outline)
             self._ax.add_patch(goal)
 
-            if has_serif and goals_outlined == 'white':  # draw serifs around the outline goal circle
-                serif_width = width*2
+            # draw serifs on the bars edges
+            if has_serif and goals_outlined == 'white':
+                serif_width = width * 2
                 serif_height = -0.8 if isAway else 0.8
                 serif_y_position = height + 2.2 if isAway else height - 1.2
                 serif = Serif(xy=(bar_x_position, serif_y_position), width=serif_width, height=serif_height, fc=color)
@@ -405,7 +399,8 @@ class XGBars:
 
 if __name__ == '__main__':
     myXGBars = XGBars(
-        home_scores=[(0, 0.4), (11, 0.23, True), (15, 0.11), (38, True, 0.4), (60, 0.8, True), (72, 0.18), (75, 0.30), (89, 0.39)],
+        home_scores=[(0, 0.4), (11, 0.23, True), (15, 0.11), (38, True, 0.4), (60, 0.8, True), (72, 0.18), (75, 0.30),
+                     (89, 0.39)],
         away_scores=[(21, 0.54, True), (56, 0.6), (49, 0.15), (87, 0.39), (80, 0.14), (67, 0.11, True)],
-        saveto='./myFig.png',
+        timeline_ticks_type='hole',
     )
