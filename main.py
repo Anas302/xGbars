@@ -74,7 +74,7 @@ class XGBars:
                  match_time: int = 90, timeline_color: tuple = (0.0, 0.0, 0.0),
                  timeline_ticks_color: tuple = (0.0, 0.0, 0.0), timeline_ticks_type: str = 'bar',
                  timeline_height: float = 0.25, bars_width: float = 0.5, bars_height: float = 2.8,
-                 coloring_mode: str = 'linear', goals_outline: str = 'white', has_serif: bool = True,
+                 coloring_mode: str = 'linear', goals_outline: str = 'none', has_serif: bool = True,
                  dynamic_width: bool = True, center_ticks: bool = False,
                  show: bool = True, saveto: str = None):
         """
@@ -94,15 +94,15 @@ class XGBars:
         :param bars_height: the height of the xG bars. Defaults to 1.0
         :param coloring_mode: how the darkness of the bars increase as the xG increases. Set to 'linear' by default.
         valid values are: ['linear', 'quad', 'cubic', 'sqrt'].
-        :param goals_outline: how the goals circles will be outlined. Valid values are ['same', 'white']. Set to 'same'
+        :param goals_outline: how the goals circles will be outlined. Valid values are ['same', 'none']. Set to 'same'
         by default (outlines have the same color as the xG bar).
         :param has_serif: if True, the white outlines around each goal circle will have a serif from the bar.
         :param dynamic_width: if True, the width of each bar will increase by xG/2.
         :param show: if True (default), the figure will be displayed in a pop-up window.
         :param saveto: the path where the figure will be saved. Defaults to 'None' (do not save the figure). Save as
-        .PNG if you want the background to be transparent.
+        .png if you want the background to be transparent.
         Example of a valid file path: `C:/Users/xx/Desktop/myFig.png` or `./myFig.jpg`.
-        If the file name and extension are not provided, the current time will be used as the name with .png extension.
+        If file name and extension are not provided, the default UID of the figure will be used as the name with .png extension.
         """
         # Create a figure and axes
         MIN_POINT = (0.5 - bars_height - 0.05) - (bars_width + bars_height / 10)
@@ -134,8 +134,8 @@ class XGBars:
         assert coloring_mode in ["linear", "cubic", "sqrt", "quad"], \
             "coloring_mode must be one of those values: ['linear', 'cubic', 'sqrt', 'quad']"
         assert bars_width > 0, "The xG bars' width cannot be a 0 or negative number"
-        assert goals_outline in ['same', 'white'], "Invalid 'goals_outlined' parameter, must be one of those values:" \
-                                                   " ['same', 'white']"
+        assert goals_outline in ['same', 'none'], "Invalid 'goals_outlined' parameter, must be one of those values:" \
+                                                  "['same', 'none']"
         assert timeline_ticks_type in ['bar', 'hole', 'gap'], "Invalid 'timeline_ticks_type' parameter, must be one " \
                                                               "of those values: ['bar', 'hole', 'gap']"
 
@@ -156,7 +156,9 @@ class XGBars:
                             dynamic_width=dynamic_width
                             )
 
-        # save the figure and/or display it on screen
+        # save the figure and/or display it on screen.
+        # NOTE: saving the figure as .png with `timeline_tick_type` set to any value other than 'bar' is slow
+        # in processing, since the image is reloaded and saved twice for background removal.
         if saveto is not None:
             assert os.path.isdir(os.path.dirname(saveto)), f"The provided file path {saveto} doesn't exist"
             directory, file_name = os.path.split(saveto)
@@ -194,7 +196,7 @@ class XGBars:
         :param isAway: whether the xG belongs to the away team or the home team.
         :param isGoal: whether the shot resulted in a goal or not. Set to False by default.
         :param goals_outlined: the type of outline that will be drawn around each goal circle. Valid values:
-        ['white', 'same']
+        [none', 'same']
         :param has_serif: if True, xG bars with goals will have serifs on their top edges.
         """
         minute = (minute / 10) * (self.bars_width / 0.1)
@@ -207,7 +209,7 @@ class XGBars:
             circle_y_position = 0.5 - height
             serif_y_position = 2.2 - height
             serif_height = -0.8
-            height = -1 * height
+            height = (-1 * height) + self.timeline_height
         else:  # above the timeline axis
             serif_y_position = height - 1.2
             serif_height = 0.8
@@ -232,7 +234,7 @@ class XGBars:
                 goal_outline = Circle(xy=(circle_x_position, circle_y_position), radius=circle_outline_radius, fc=color)
                 self._ax.add_patch(goal_outline)
             else:  # no outline around the goal circle. Shorten the height of the xG bars
-                height = height + 1.5 if isAway else height - 1.5
+                height = height + 1 if isAway else height - 1
 
             # Draw the bar and the goal circle above it
             goal = Circle(xy=(circle_x_position, circle_y_position), radius=circle_radius, fc='black')
@@ -394,27 +396,25 @@ class XGBars:
         # Convert the image to RGBA mode
         image = image.convert("RGBA")
 
-        # Get the image data as a sequence of tuples
-        pixel_data = list(image.getdata())
+        # Get the image size
+        width, height = image.size
 
-        # Calculate the maximum allowed RGB value for white
-        max_white = (255, 255, 255)
-
-        # Create a new list to store modified pixel data
-        modified_data = []
+        # Create a new image with transparent background
+        result_image = Image.new("RGBA", (width, height), (255, 255, 255, 0))
 
         # Iterate over each pixel
-        for pixel in pixel_data:
-            # Check if the pixel is white or close to white
-            if all(c >= max_val for c, max_val in zip(pixel[:3], max_white)):
-                # Set the alpha channel of white pixels to 0 (transparent)
-                modified_data.append((255, 255, 255, 0))
-            else:
-                modified_data.append(pixel)
+        for x in range(width):
+            for y in range(height):
+                # Get the pixel color at (x, y)
+                r, g, b, a = image.getpixel((x, y))
 
-        # Create a new image with the modified pixel data
-        result_image = Image.new(image.mode, image.size)
-        result_image.putdata(modified_data)
+                # Check if the pixel is white or close to white
+                if r >= 255 and g >= 255 and b >= 255:
+                    # Set the alpha channel of white pixels to 0 (transparent)
+                    result_image.putpixel((x, y), (255, 255, 255, 0))
+                else:
+                    # Copy the pixel from the original image
+                    result_image.putpixel((x, y), (r, g, b, a))
 
         # Save the modified image
         result_image.save(saveto)
@@ -439,6 +439,5 @@ if __name__ == '__main__':
             (87, 0.39),
             (80, 0.14),
             (67, 0.11, True)
-        ],
-        saveto="./",
+        ]
     )
