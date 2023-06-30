@@ -201,22 +201,25 @@ class XGBars:
         """
         minute = (minute / 10) * (self.bars_width / 0.1)
         bar_x_position = (minute - width / 2) if self.center_ticks else minute
-        bar_y_position = 0.5 - (self.timeline_height / 2)
         circle_x_position = minute if self.center_ticks else (minute + width / 2)
         circle_radius = self.bars_width * 1.5
 
         if isAway:  # below the timeline axis
-            circle_y_position = 0.5 - height
-            serif_y_position = 2.2 - height
+            bar_y_position = 0.5 - self.timeline_height/2
+            circle_y_position = -height + bar_y_position - 0.5
+            serif_y_position = bar_y_position + 1.2 - height
             serif_height = -0.8
-            height = (-1 * height) + self.timeline_height
+            height = (-1 * height)
+            underline_height = self.timeline_height
         else:  # above the timeline axis
-            serif_y_position = height - 1.2
+            bar_y_position = 0.5 + self.timeline_height/2
+            serif_y_position = bar_y_position + height - 1.2
             serif_height = 0.8
-            circle_y_position = 0.5 + height
+            circle_y_position = height + bar_y_position + 0.5
+            underline_height = -self.timeline_height
 
         # Draw a line underneath each bar
-        bar_underline = Rectangle(xy=(bar_x_position, bar_y_position), width=width, height=self.timeline_height,
+        bar_underline = Rectangle(xy=(bar_x_position, bar_y_position), width=width, height=underline_height,
                                   fc=self.timeline_color)
         self._ax.add_patch(bar_underline)
 
@@ -243,6 +246,7 @@ class XGBars:
             self._ax.add_patch(goal)
         else:
             # Draw the bar only
+            height = height-0.5 if isAway else height+0.5
             bar = Rectangle(xy=(bar_x_position, bar_y_position), width=width, height=height, fc=color)
             self._ax.add_patch(bar)
 
