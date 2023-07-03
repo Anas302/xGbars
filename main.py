@@ -125,19 +125,11 @@ class XGBars:
         self.timeline_height = timeline_height
         self.center_ticks = center_ticks
         self.timeline_color = timeline_color
+        self.timeline_ticks_type = timeline_ticks_type
         has_serif = False if goals_outline == 'same' else has_serif
 
-        # check the validity of all input data
-        assert self.match_time > 0, "Match time cannot be 0 or a negative number"
-        assert self.timeline_height > 0, "The timeline cannot have a height of 0 or negative number"
-        assert bars_height > 0, "The xG bars' heights cannot be a 0 or negative number"
-        assert coloring_mode in ["linear", "cubic", "sqrt", "quad"], \
-            "coloring_mode must be one of those values: ['linear', 'cubic', 'sqrt', 'quad']"
-        assert bars_width > 0, "The xG bars' width cannot be a 0 or negative number"
-        assert goals_outline in ['same', 'none'], "Invalid 'goals_outlined' parameter, must be one of those values:" \
-                                                  "['same', 'none']"
-        assert timeline_ticks_type in ['bar', 'hole', 'gap'], "Invalid 'timeline_ticks_type' parameter, must be one " \
-                                                              "of those values: ['bar', 'hole', 'gap']"
+        # check the input is correct and valid
+        self._validate_parameters(bars_height, bars_width, coloring_mode, goals_outline, saveto)
 
         # store the shots tuples as Shot object for processing. If tuple is 2D assume the 3rd value 'isGoal' is False.
         home_shots = [Shot(ho[0], ho[1], False, (ho[2] if len(ho) == 3 else False)) for ho in home_scores]
@@ -157,30 +149,8 @@ class XGBars:
                             )
 
         # save the figure and/or display it on screen.
-        # NOTE: saving the figure as .png with `timeline_tick_type` set to any value other than 'bar' is slow
-        # in processing, since the image is reloaded and saved twice for background removal.
         if saveto is not None:
-            assert os.path.isdir(os.path.dirname(saveto)), f"The provided file path {saveto} doesn't exist"
-            directory, file_name = os.path.split(saveto)
-            filename, extension = os.path.splitext(file_name)
-
-            # if the provided path doesn't contain the filename and extension, save file as png with current time name
-            if filename == '' or extension == '':
-                new_file_path = os.path.join(f"{saveto}", f"{id(self._fig)}.png")
-                print(f"The figure is saved as `{new_file_path}`,"
-                      f"since the provided path `{saveto}` doesn't contain the file name and its extension")
-                saveto = new_file_path
-                extension = '.png'
-
-            # if the file is saveed as a png and contains white elements,
-            # the white background and elements
-            should_remove_background = (extension.lower() == '.png') and (timeline_ticks_type != 'bar')
-            if should_remove_background:
-                plt.savefig(saveto, transparent=True)
-                self.remove_white_from_image(saveto, saveto)
-            else:
-                plt.savefig(saveto)
-            print(f"File `{saveto}` has been saved sucessfully")
+            self._save_figure(saveto)
 
         if show:
             plt.show()
@@ -359,6 +329,44 @@ class XGBars:
                             ticks_color=timeline_ticks_color,
                             ticks_type=timeline_ticks_type)
 
+    def _validate_parameters(self, bars_height, bars_width, coloring_mode, goals_outline, saveto):
+        assert self.match_time > 0, "Match time cannot be 0 or a negative number"
+        assert self.timeline_height > 0, "The timeline cannot have a height of 0 or negative number"
+        assert bars_height > 0, "The xG bars' heights cannot be a 0 or negative number"
+        assert bars_width > 0, "The xG bars' width cannot be a 0 or negative number"
+        assert coloring_mode in ["linear", "cubic", "sqrt", "quad"], \
+            "coloring_mode must be one of those values: ['linear', 'cubic', 'sqrt', 'quad']"
+        assert goals_outline in ['same', 'none'], "Invalid 'goals_outlined' parameter, must be one of those values:" \
+                                                  "['same', 'none']"
+        assert self.timeline_ticks_type in ['bar', 'hole', 'gap'], "Invalid 'timeline_ticks_type' parameter, must be one " \
+                                                              "of those values: ['bar', 'hole', 'gap']"
+        if saveto is not None:
+            assert os.path.isdir(os.path.dirname(saveto)), f"The provided file path {saveto} doesn't exist"
+
+    def _save_figure(self, saveto):
+        # NOTE: saving the figure as .png with `timeline_tick_type` set to any value other than 'bar' is slow
+        # in processing, since the image is reloaded and saved twice for background removal.
+        directory, file_name = os.path.split(saveto)
+        filename, extension = os.path.splitext(file_name)
+
+        # if the provided path doesn't contain the filename and extension, save file as png with current time name
+        if filename == '' or extension == '':
+            new_file_path = os.path.join(f"{saveto}", f"{id(self._fig)}.png")
+            print(f"The figure is saved as `{new_file_path}`,"
+                  f"since the provided path `{saveto}` doesn't contain the file name and its extension")
+            saveto = new_file_path
+            extension = '.png'
+
+        # if the file is saveed as a png and contains white elements,
+        # the white background and elements
+        should_remove_background = (extension.lower() == '.png') and (self.timeline_ticks_type != 'bar')
+        if should_remove_background:
+            plt.savefig(saveto, transparent=True)
+            self.remove_white_from_image(saveto, saveto)
+        else:
+            plt.savefig(saveto)
+        print(f"File `{saveto}` has been saved sucessfully")
+
     @staticmethod
     def get_rgb_from_xg(xG, mode):
         """
@@ -428,7 +436,7 @@ if __name__ == '__main__':
     myXGBars = XGBars(
         home_scores=[
             (10, 0.4, True),
-            (13, 0.23, True),
+            (11, 0.23, True),
             (15, 0.11),
             (38, True, 0.4),
             (60, 0.8, True),
@@ -438,8 +446,8 @@ if __name__ == '__main__':
         ],
         away_scores=[
             (21, 0.54, True),
-            (56, 0.6),
-            (49, 0.15),
+            (56, 0.2),
+            (55, 0.95, True),
             (87, 0.39),
             (80, 0.14),
             (67, 0.11, True)
