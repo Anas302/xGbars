@@ -18,18 +18,34 @@ class Serif(PathPatch):
 
     def _get_verts_and_codes(self):
         # Generate the vertices of the Serif shape
-        verts = [
-            (self._x + self._w / 4, self._y),
-            (self._x + self._w * 3 / 4, self._y),
-            (self._x + self._w * 3 / 4, self._y + self._h * 3 / 5),
-            (self._x + self._w, self._y + self._h * 4 / 5),
-            (self._x + self._w * 9 / 10, self._y + self._h),
-            (self._x + self._w / 2, self._y + self._h * 3 / 5),
-            (self._x + self._w / 10, self._y + self._h),
-            (self._x, self._y + self._h * 4 / 5),
-            (self._x + self._w * 1 / 4, self._y + self._h * 3 / 5),
-            (self._x + self._w / 4, self._y)
-        ]
+        """
+
+              |G\                             |E \
+             |    \                         |     \
+            |       \                     |         \
+           |           \                |             \
+          H              -  __ F __  -                 D
+            \                                      /
+               \                                /
+                  \                           /
+                     I                     C
+                       \                  /
+                        |                 |
+                        |                 |
+                        A _______________ B
+
+        THE FIGURE IS NOT DRAWN TO SCALE
+        """
+        A = (self._x + self._w / 4, self._y)
+        B = (self._x + self._w * 3 / 4, self._y)
+        C = (self._x + self._w * 3 / 4, self._y + self._h * 2 / 5)
+        D = (self._x + self._w * 9 / 10, self._y + self._h * 4 / 5)
+        E = (self._x + self._w * 8 / 10, self._y + self._h * 0.9)
+        F = (self._x + self._w / 2, self._y + self._h * 3 / 5)
+        G = (self._x + self._w * 2 / 10, self._y + self._h * 0.9)
+        H = (self._x + self._w * 1 / 10, self._y + self._h * 4 / 5)
+        I = (self._x + self._w / 4, self._y + self._h * 2 / 5)
+        verts = [A, B, C, D, E, F, G, H, I, A]
         codes = [Path.MOVETO,
                  Path.LINETO,
                  Path.CURVE3,
@@ -69,14 +85,23 @@ class Shot:
 
 class XGBars:
 
-    def __init__(self, home_scores: List[Union[Tuple[int, float, bool], Tuple[int, float]]] = None,
+    def __init__(self,
+                 home_scores: List[Union[Tuple[int, float, bool], Tuple[int, float]]] = None,
                  away_scores: List[Union[Tuple[int, float, bool], Tuple[int, float]]] = None,
-                 match_time: int = 90, timeline_color: tuple = (0.0, 0.0, 0.0),
-                 timeline_ticks_color: tuple = (0.0, 0.0, 0.0), timeline_ticks_type: str = 'bar',
-                 timeline_height: float = 0.25, bars_width: float = 0.5, bars_height: float = 2.8,
-                 coloring_mode: str = 'linear', goals_outline: str = 'none', has_serif: bool = True,
-                 dynamic_width: bool = True, center_ticks: bool = False,
-                 show: bool = True, saveto: str = None):
+                 match_time: int = 90,
+                 timeline_color: tuple = (0.0, 0.0, 0.0),
+                 timeline_ticks_color: tuple = (0.0, 0.0, 0.0),
+                 timeline_ticks_type: str = 'bar',
+                 timeline_height: float = 0.25,
+                 bars_width: float = 0.5,
+                 bars_height: float = 2.4,
+                 coloring_mode: str = 'linear',
+                 goals_outline: str = 'none',
+                 has_serif: bool = True,
+                 dynamic_width: bool = True,
+                 center_ticks: bool = False,
+                 show: bool = True,
+                 saveto: str = None):
         """
         :param home_scores: a list of 3D or 4D Tuples of the form (minute, xG, isGoal) of the home team. Where:
             - 'minute' is the time of when the shot was taken.
@@ -132,8 +157,12 @@ class XGBars:
         self._validate_parameters(bars_height, bars_width, coloring_mode, goals_outline, saveto)
 
         # store the shots tuples as Shot object for processing. If tuple is 2D assume the 3rd value 'isGoal' is False.
+        home_scores = [] if home_scores is None else home_scores
         home_shots = [Shot(ho[0], ho[1], False, (ho[2] if len(ho) == 3 else False)) for ho in home_scores]
+
+        away_scores = [] if away_scores is None else away_scores
         away_shots = [Shot(aw[0], aw[1], True, (aw[2] if len(aw) == 3 else False)) for aw in away_scores]
+
         all_shots = home_shots + away_shots
 
         self._create_xGBars(shots_list=all_shots,
@@ -157,15 +186,21 @@ class XGBars:
         else:
             plt.close()
 
-    def _draw_xg_bar(self, width: float, minute: int, color: tuple, height: float, isAway: bool,
-                     isGoal: bool, goals_outlined: str, has_serif: bool):
+    def _draw_xg_bar(self, width: float,
+                     minute: int,
+                     color: tuple,
+                     height: float,
+                     isAway: bool,
+                     isGoal: bool,
+                     goals_outline: str,
+                     has_serif: bool):
         """
         Draw a single xG bar along the timeline axis. If the xG results in a goal, a circle will also be drawn on the
         bar to indicate a goal. Away team is plotted under the timeline while the home team is plotted over it.
         :param minute: the time in minutes in which the xG is to be plotted. The time must be between 0 and 90 minutes.
         :param isAway: whether the xG belongs to the away team or the home team.
         :param isGoal: whether the shot resulted in a goal or not. Set to False by default.
-        :param goals_outlined: the type of outline that will be drawn around each goal circle. Valid values:
+        :param goals_outline: the type of outline that will be drawn around each goal circle. Valid values:
         [none', 'same']
         :param has_serif: if True, xG bars with goals will have serifs on their top edges.
         """
@@ -175,15 +210,15 @@ class XGBars:
         circle_radius = self.bars_width * 1.5
 
         if isAway:  # below the timeline axis
-            bar_y_position = 0.5 - self.timeline_height/2
+            bar_y_position = 0.5 - self.timeline_height / 2
             circle_y_position = -height + bar_y_position - 0.5
-            serif_y_position = bar_y_position + 1.2 - height
+            serif_y_position = bar_y_position + 1.25 - height
             serif_height = -0.8
             height = (-1 * height)
             underline_height = self.timeline_height
         else:  # above the timeline axis
-            bar_y_position = 0.5 + self.timeline_height/2
-            serif_y_position = bar_y_position + height - 1.2
+            bar_y_position = 0.5 + self.timeline_height / 2
+            serif_y_position = bar_y_position + height - 1.25
             serif_height = 0.8
             circle_y_position = height + bar_y_position + 0.5
             underline_height = -self.timeline_height
@@ -202,7 +237,7 @@ class XGBars:
                 self._ax.add_patch(serif)
 
             # Draw an outline around the goal circle with same width and color as the bar
-            if goals_outlined == 'same':
+            if goals_outline == 'same':
                 circle_outline_radius = width + circle_radius
                 goal_outline = Circle(xy=(circle_x_position, circle_y_position), radius=circle_outline_radius, fc=color)
                 self._ax.add_patch(goal_outline)
@@ -216,7 +251,7 @@ class XGBars:
             self._ax.add_patch(goal)
         else:
             # Draw the bar only
-            height = height-0.5 if isAway else height+0.5
+            height = height - 0.5 if isAway else height + 0.5
             bar = Rectangle(xy=(bar_x_position, bar_y_position), width=width, height=height, fc=color)
             self._ax.add_patch(bar)
 
@@ -297,6 +332,9 @@ class XGBars:
             assert 0 <= xG <= 1, "xG score must be a value between 0 and 1 inclusive"
             assert 0 <= time <= self.match_time, "Minutes must be a value between 0 and the match time inclusive"
             assert isinstance(time, int), "Minutes must be an integer"
+            assert isinstance(xG, float) or isinstance(xG, int), "xG score must be an integer or a float"
+            assert isinstance(isAway, bool), "isAway must be a boolean"
+            assert isinstance(isGoal, bool), "isGoal must be a boolean"
             if isGoal:
                 goals.append(Shot(time, xG, isAway, isGoal))
             else:
@@ -309,7 +347,7 @@ class XGBars:
                                   isGoal=isGoal,
                                   height=bars_height,
                                   has_serif=has_serif,
-                                  goals_outlined=goals_outlined)
+                                  goals_outline=goals_outlined)
 
         # draw the xG bars with goals at the end to be displayed on front
         for goal in goals:
@@ -321,7 +359,7 @@ class XGBars:
                               isAway=goal.isAway,
                               isGoal=goal.isGoal,
                               height=bars_height,
-                              goals_outlined=goals_outlined,
+                              goals_outline=goals_outlined,
                               has_serif=has_serif)
 
         self._draw_timeline(length=timeline_length,
@@ -329,7 +367,11 @@ class XGBars:
                             ticks_color=timeline_ticks_color,
                             ticks_type=timeline_ticks_type)
 
-    def _validate_parameters(self, bars_height, bars_width, coloring_mode, goals_outline, saveto):
+    def _validate_parameters(self, bars_height,
+                             bars_width,
+                             coloring_mode,
+                             goals_outline,
+                             saveto):
         assert self.match_time > 0, "Match time cannot be 0 or a negative number"
         assert self.timeline_height > 0, "The timeline cannot have a height of 0 or negative number"
         assert bars_height > 0, "The xG bars' heights cannot be a 0 or negative number"
@@ -338,8 +380,8 @@ class XGBars:
             "coloring_mode must be one of those values: ['linear', 'cubic', 'sqrt', 'quad']"
         assert goals_outline in ['same', 'none'], "Invalid 'goals_outlined' parameter, must be one of those values:" \
                                                   "['same', 'none']"
-        assert self.timeline_ticks_type in ['bar', 'hole', 'gap'], "Invalid 'timeline_ticks_type' parameter, must be one " \
-                                                              "of those values: ['bar', 'hole', 'gap']"
+        assert self.timeline_ticks_type in ['bar', 'hole', 'gap'], \
+            "Invalid 'timeline_ticks_type' parameter, must be one of those values: ['bar', 'hole', 'gap']"
         if saveto is not None:
             assert os.path.isdir(os.path.dirname(saveto)), f"The provided file path {saveto} doesn't exist"
 
@@ -368,7 +410,7 @@ class XGBars:
         print(f"File `{saveto}` has been saved sucessfully")
 
     @staticmethod
-    def get_rgb_from_xg(xG, mode):
+    def get_rgb_from_xg(xG, mode='linear'):
         """
         Given an xG score, return a color that correponds to it. The higher the xG the darker the color. By default the
         color uses linear interpolation, where xG = 1 is black and xG = 0 is white.
@@ -435,21 +477,25 @@ class XGBars:
 if __name__ == '__main__':
     myXGBars = XGBars(
         home_scores=[
-            (10, 0.4, True),
-            (11, 0.23, True),
+            (10, 0.2),
             (15, 0.11),
-            (38, True, 0.4),
-            (60, 0.8, True),
+            (38, 0.4, True),
+            (60, 0.15, True),
             (72, 0.18),
             (75, 0.30),
             (89, 0.39)
         ],
         away_scores=[
-            (21, 0.54, True),
-            (56, 0.2),
-            (55, 0.95, True),
-            (87, 0.39),
-            (80, 0.14),
-            (67, 0.11, True)
-        ]
+            (9, 0.2),
+            (20, 0.6, True),
+            (23, 0.11),
+            (35, 0.4),
+            (47, 0.12),
+            (62, 0.18),
+            (69, 0.1, True),
+            (78, 0.39)
+        ],
+        timeline_color=XGBars.get_rgb_from_xg(0.1),
+        timeline_ticks_color=XGBars.get_rgb_from_xg(0.1),
+        saveto=r"C:\Users\anas3\Desktop\01.png",
     )
