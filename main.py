@@ -3,7 +3,7 @@ from matplotlib.patches import Circle, Rectangle, PathPatch
 from matplotlib.path import Path
 from typing import List, Tuple, Union
 import matplotlib.pyplot as plt
-import math
+from scipy.interpolate import interp1d
 from PIL import Image
 
 
@@ -95,7 +95,6 @@ class XGBars:
                  timeline_height: float = 0.25,
                  bars_width: float = 0.5,
                  bars_height: float = 2.4,
-                 coloring_mode: str = 'linear',
                  goals_outline: str = 'none',
                  has_serif: bool = True,
                  dynamic_width: bool = True,
@@ -117,8 +116,6 @@ class XGBars:
         :param timeline_height: the height of the timeline (x-axis).
         :param bars_width: the width of all xG bars. Defaults to 0.2
         :param bars_height: the height of the xG bars. Defaults to 1.0
-        :param coloring_mode: how the darkness of the bars increase as the xG increases. Set to 'linear' by default.
-        valid values are: ['linear', 'quad', 'cubic', 'sqrt'].
         :param goals_outline: how the goals circles will be outlined. Valid values are ['same', 'none']. Set to 'same'
         by default (outlines have the same color as the xG bar).
         :param has_serif: if True, the white outlines around each goal circle will have a serif from the bar.
@@ -154,7 +151,7 @@ class XGBars:
         has_serif = False if goals_outline == 'same' else has_serif
 
         # check the input is correct and valid
-        self._validate_parameters(bars_height, bars_width, coloring_mode, goals_outline, saveto)
+        self._validate_parameters(bars_height, bars_width, goals_outline, saveto)
 
         # store the shots tuples as Shot object for processing. If tuple is 2D assume the 3rd value 'isGoal' is False.
         home_scores = [] if home_scores is None else home_scores
@@ -166,7 +163,6 @@ class XGBars:
         all_shots = home_shots + away_shots
 
         self._create_xGBars(shots_list=all_shots,
-                            coloring_mode=coloring_mode,
                             timeline_color=timeline_color,
                             timeline_ticks_color=timeline_ticks_color,
                             timeline_ticks_type=timeline_ticks_type,
@@ -303,7 +299,6 @@ class XGBars:
                     self._ax.add_patch(mins_tick)
 
     def _create_xGBars(self, shots_list: List[Shot],
-                       coloring_mode: str,
                        timeline_color: Tuple[float, float, float],
                        timeline_ticks_color: Tuple[float, float, float],
                        timeline_length: float,
@@ -338,8 +333,13 @@ class XGBars:
             if isGoal:
                 goals.append(Shot(time, xG, isAway, isGoal))
             else:
-                bar_width = (self.bars_width + xG / 2.0) if dynamic_width else self.bars_width
-                bar_color = self.get_rgb_from_xg(xG, mode=coloring_mode)
+                bar_width = (self.bars_width + xG) if dynamic_width else self.bars_width
+                if time == 88:
+                    bar_width = min(bar_width, 1)
+                elif time == 89:
+                    bar_width = min(bar_width, self.bars_width)
+
+                bar_color = self.get_rgb_from_xg(xG)
                 self._draw_xg_bar(width=bar_width,
                                   minute=time,
                                   color=bar_color,
@@ -351,8 +351,13 @@ class XGBars:
 
         # draw the xG bars with goals at the end to be displayed on front
         for goal in goals:
-            bar_width = (self.bars_width + goal.xG / 2.0) if dynamic_width else self.bars_width
-            bar_color = self.get_rgb_from_xg(goal.xG, mode=coloring_mode)
+            bar_width = (self.bars_width + goal.xG) if dynamic_width else self.bars_width
+            if goal.minute == 88:
+                bar_width = min(bar_width, 1)
+            elif goal.minute == 89:
+                bar_width = min(bar_width, self.bars_width)
+
+            bar_color = self.get_rgb_from_xg(goal.xG)
             self._draw_xg_bar(minute=goal.minute,
                               width=bar_width,
                               color=bar_color,
@@ -369,15 +374,12 @@ class XGBars:
 
     def _validate_parameters(self, bars_height,
                              bars_width,
-                             coloring_mode,
                              goals_outline,
                              saveto):
         assert self.match_time > 0, "Match time cannot be 0 or a negative number"
         assert self.timeline_height > 0, "The timeline cannot have a height of 0 or negative number"
         assert bars_height > 0, "The xG bars' heights cannot be a 0 or negative number"
         assert bars_width > 0, "The xG bars' width cannot be a 0 or negative number"
-        assert coloring_mode in ["linear", "cubic", "sqrt", "quad"], \
-            "coloring_mode must be one of those values: ['linear', 'cubic', 'sqrt', 'quad']"
         assert goals_outline in ['same', 'none'], "Invalid 'goals_outlined' parameter, must be one of those values:" \
                                                   "['same', 'none']"
         assert self.timeline_ticks_type in ['bar', 'hole', 'gap'], \
@@ -410,36 +412,83 @@ class XGBars:
         print(f"File `{saveto}` has been saved sucessfully")
 
     @staticmethod
-    def get_rgb_from_xg(xG, mode='linear'):
+    def get_rgb_from_xg(xG):
         """
         Given an xG score, return a color that correponds to it. The higher the xG the darker the color. By default the
         color uses linear interpolation, where xG = 1 is black and xG = 0 is white.
         :param xG: the expected goal score between [0, 1].
-        :param mode: the interpolation of any xG value between 0 and 1 to its respective RGB color. Can be one of the
-        following: ['linear', 'quad', 'cubic', 'sqrt']. Defaults to 'linear'. 'quad' and 'cubic' provide more emphasis
-        on high xG scores. Whereas 'sqrt' provides more emphasis on low values.
         :return: 3D Tuple represnting the RGB colors.
         """
-
+        # the colors will be scaled from 0 to 1 according to a a linearly interpolated cumulitive distribution function
+        # based on the StatsBomb open-data dataset of xG scores.
         # Calculate interpolated color values
-        if mode == 'linear':
-            red = 1 - xG
-            green = 1 - xG
-            blue = 1 - xG
-        elif mode == 'sqrt':
-            red = 1 - math.sqrt(xG)
-            green = 1 - math.sqrt(xG)
-            blue = 1 - math.sqrt(xG)
-        elif mode == 'quad':
-            red = 1 - xG ** 2
-            green = 1 - xG ** 2
-            blue = 1 - xG ** 2
-        elif mode == 'cubic':
-            red = 1 - xG ** 3
-            green = 1 - xG ** 3
-            blue = 1 - xG ** 3
-        else:
-            raise ValueError("The provided mode arguement is incorrect. 'mode' should be in ['linear', 'quad', 'sqrt']")
+        cdf = interp1d(x=[0.0, 0.005, 0.01, 0.015, 0.02, 0.025, 0.03, 0.035, 0.04,
+                          0.045, 0.05, 0.055, 0.06, 0.065, 0.07, 0.075, 0.08, 0.085,
+                          0.09, 0.095, 0.1, 0.105, 0.11, 0.115, 0.12, 0.125, 0.13,
+                          0.135, 0.14, 0.145, 0.15, 0.155, 0.16, 0.165, 0.17, 0.175,
+                          0.18, 0.185, 0.19, 0.195, 0.2, 0.205, 0.21, 0.215, 0.22,
+                          0.225, 0.23, 0.235, 0.24, 0.245, 0.25, 0.255, 0.26, 0.265,
+                          0.27, 0.275, 0.28, 0.285, 0.29, 0.295, 0.3, 0.305, 0.31,
+                          0.315, 0.32, 0.325, 0.33, 0.335, 0.34, 0.345, 0.35, 0.355,
+                          0.36, 0.365, 0.37, 0.375, 0.38, 0.385, 0.39, 0.395, 0.4,
+                          0.405, 0.41, 0.415, 0.42, 0.425, 0.43, 0.435, 0.44, 0.445,
+                          0.45, 0.455, 0.46, 0.465, 0.47, 0.475, 0.48, 0.485, 0.49,
+                          0.495, 0.5, 0.505, 0.51, 0.515, 0.52, 0.525, 0.53, 0.535,
+                          0.54, 0.545, 0.55, 0.555, 0.56, 0.565, 0.57, 0.575, 0.58,
+                          0.585, 0.59, 0.595, 0.6, 0.605, 0.61, 0.615, 0.62, 0.625,
+                          0.63, 0.635, 0.64, 0.645, 0.65, 0.655, 0.66, 0.665, 0.67,
+                          0.675, 0.68, 0.685, 0.69, 0.695, 0.7, 0.705, 0.71, 0.715,
+                          0.72, 0.725, 0.73, 0.735, 0.74, 0.745, 0.75, 0.755, 0.76,
+                          0.765, 0.77, 0.775, 0.78, 0.785, 0.79, 0.795, 0.8, 0.805,
+                          0.81, 0.815, 0.82, 0.825, 0.83, 0.835, 0.84, 0.845, 0.85,
+                          0.855, 0.86, 0.865, 0.87, 0.875, 0.88, 0.885, 0.89, 0.895,
+                          0.9, 0.905, 0.91, 0.915, 0.92, 0.925, 0.93, 0.935, 0.94,
+                          0.945, 0.95, 0.955, 0.96, 0.965, 0.97, 0.975, 0.98, 0.985,
+                          0.99, 0.995, 1.0],
+                       y=[0.0, 0.00358416, 0.06358493, 0.10126705, 0.14377325,
+                          0.20354154, 0.26360043, 0.31499923, 0.36145769, 0.40644374,
+                          0.44550139, 0.48314476, 0.51906386, 0.55300682, 0.58270691,
+                          0.60899721, 0.63377635, 0.65582378, 0.67562384, 0.69397086,
+                          0.71018676, 0.7254146, 0.73856944, 0.75042622, 0.76141119,
+                          0.77195056, 0.78113376, 0.78971637, 0.79769839, 0.80548667,
+                          0.8125, 0.81926147, 0.82584857, 0.83113763, 0.83611671,
+                          0.84115391, 0.84578425, 0.85056959, 0.85446373, 0.85857099,
+                          0.86322071, 0.86692111, 0.87017591, 0.8741088, 0.87761547,
+                          0.88054092, 0.88375697, 0.88668242, 0.8895885, 0.89264957,
+                          0.89530378, 0.89727991, 0.89975976, 0.90225899, 0.90423512,
+                          0.90659873, 0.9086911, 0.91060911, 0.91264337, 0.91483261,
+                          0.91644064, 0.91851364, 0.92029603, 0.92213655, 0.92384144,
+                          0.92521699, 0.92684439, 0.9283943, 0.92996358, 0.93145536,
+                          0.93310214, 0.93422582, 0.93571761, 0.93709315, 0.93810059,
+                          0.93937926, 0.94025108, 0.94174287, 0.94307967, 0.9441646,
+                          0.9454239, 0.94650883, 0.94771001, 0.94877557, 0.94997675,
+                          0.95108106, 0.95193351, 0.95274721, 0.95369653, 0.95480084,
+                          0.95588577, 0.95673822, 0.95751317, 0.95815251, 0.95884997,
+                          0.95968304, 0.96051612, 0.96123295, 0.96204665, 0.96287973,
+                          0.96353844, 0.96410028, 0.96512709, 0.96570831, 0.9662314,
+                          0.96673512, 0.96731634, 0.96776193, 0.96826565, 0.96861438,
+                          0.96913748, 0.96969932, 0.97002867, 0.9704549, 0.97091987,
+                          0.9712686, 0.97173357, 0.97206293, 0.97241166, 0.97264414,
+                          0.97287663, 0.97320598, 0.97351596, 0.97382595, 0.97407781,
+                          0.97431029, 0.97469777, 0.97500775, 0.97527898, 0.97556959,
+                          0.97564709, 0.97589895, 0.97617018, 0.97646079, 0.97665453,
+                          0.97686764, 0.97698388, 0.97717762, 0.97742948, 0.97766197,
+                          0.9778557, 0.97801069, 0.97818506, 0.97843692, 0.97857254,
+                          0.97865003, 0.97884377, 0.97894064, 0.97905688, 0.9791925,
+                          0.97928937, 0.97934749, 0.97959935, 0.97983184, 0.97994808,
+                          0.98004495, 0.98031618, 0.99482719, 0.99492405, 0.99517591,
+                          0.99533091, 0.99542777, 0.99556339, 0.99569901, 0.99581525,
+                          0.99598962, 0.99612523, 0.99626085, 0.99647396, 0.9965902,
+                          0.99672582, 0.99680332, 0.99693893, 0.99705518, 0.99722954,
+                          0.99732641, 0.99740391, 0.99757827, 0.99775263, 0.99800449,
+                          0.99819823, 0.9982951, 0.99845009, 0.99854696, 0.99876007,
+                          0.99887632, 0.99903131, 0.99912818, 0.99922505, 0.99939941,
+                          0.99949628, 0.99959315, 0.99967064, 0.99974814, 0.99974814,
+                          0.99982564, 0.99986438, 0.9999225, 0.99994188, 0.99998063, 1.0],
+                       kind='linear')
+        red = 1 - float(cdf(xG))
+        green = 1 - float(cdf(xG))
+        blue = 1 - float(cdf(xG))
         return red, green, blue
 
     @staticmethod
@@ -478,24 +527,24 @@ if __name__ == '__main__':
     myXGBars = XGBars(
         home_scores=[
             (10, 0.2),
-            (15, 0.11),
-            (38, 0.4, True),
-            (60, 0.15, True),
-            (72, 0.18),
-            (75, 0.30),
-            (89, 0.39)
+            (15, 0.13),
+            (38, 0.19, True),
+            (60, 0.008),
+            (72, 0.08, True),
+            (75, 0.12),
+            (87, 0.78)
         ],
         away_scores=[
-            (9, 0.2),
-            (20, 0.6, True),
+            (4, 0.09),
+            (20, 0.75, True),
             (23, 0.11),
-            (35, 0.4),
-            (47, 0.12),
+            (35, 0.03),
+            (47, 0.02),
             (62, 0.18),
-            (69, 0.1, True),
-            (78, 0.39)
+            (69, 0.27, True),
+            (78, 0.12)
         ],
-        timeline_color=XGBars.get_rgb_from_xg(0.1),
-        timeline_ticks_color=XGBars.get_rgb_from_xg(0.1),
+        timeline_color=XGBars.get_rgb_from_xg(0.11),
+        timeline_ticks_color=XGBars.get_rgb_from_xg(0.11),
         saveto=r"C:\Users\anas3\Desktop\01.png",
     )
