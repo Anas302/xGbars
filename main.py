@@ -203,7 +203,7 @@ class XGBars:
         minute = (minute / 10) * (self.bars_width / 0.1)
         bar_x_position = (minute - width / 2) if self.center_ticks else minute
         circle_x_position = minute if self.center_ticks else (minute + width / 2)
-        circle_radius = self.bars_width * 1.5
+        circle_radius = self.bars_width*1.5
 
         if isAway:  # below the timeline axis
             bar_y_position = 0.5 - self.timeline_height / 2
@@ -221,7 +221,7 @@ class XGBars:
 
         # Draw a line underneath each bar
         bar_underline = Rectangle(xy=(bar_x_position, bar_y_position), width=width, height=underline_height,
-                                  fc=self.timeline_color)
+                                  fc=color)  # fc = self.timeline_color
         self._ax.add_patch(bar_underline)
 
         # If it's a goal, draw a circle without outlines or outlined in the same color as the xG bar
@@ -320,6 +320,11 @@ class XGBars:
         create_XGBars([Shot(12, 0.76, True), Shot(42, 0.5, False), Shot(50, 0.67, False, True), Shot(77, 0.23, True)])
         """
 
+        self._draw_timeline(length=timeline_length,
+                            axis_color=timeline_color,
+                            ticks_color=timeline_ticks_color,
+                            ticks_type=timeline_ticks_type)
+
         # draw the xG bars for the home team shots
         goals = []  # keep shots with goals aside and draw them at the end.
         for shot in shots_list:
@@ -366,11 +371,6 @@ class XGBars:
                               height=bars_height,
                               goals_outline=goals_outlined,
                               has_serif=has_serif)
-
-        self._draw_timeline(length=timeline_length,
-                            axis_color=timeline_color,
-                            ticks_color=timeline_ticks_color,
-                            ticks_type=timeline_ticks_type)
 
     def _validate_parameters(self, bars_height,
                              bars_width,
@@ -526,25 +526,26 @@ class XGBars:
 if __name__ == '__main__':
     myXGBars = XGBars(
         home_scores=[
-            (10, 0.2),
-            (15, 0.13),
-            (38, 0.19, True),
-            (60, 0.008),
-            (72, 0.08, True),
-            (75, 0.12),
-            (87, 0.78)
+            (10, 0.15604286),
+            (15, 0.030795082),
+            (38, 0.016441727, True),
+            (45, 0.06867906),
+            (50, 0.33817625, True),
+            (68, 0.20962389),
+            (76, 0.1623059),
+            (87, 0.50960237)
         ],
         away_scores=[
-            (4, 0.09),
-            (20, 0.75, True),
-            (23, 0.11),
-            (35, 0.03),
-            (47, 0.02),
-            (62, 0.18),
-            (69, 0.27, True),
-            (78, 0.12)
+            (4, 0.03983593),
+            (20, 0.03294254, True),
+            (23, 0.12390236),
+            (35, 0.20781437),
+            (47, 0.083558895),
+            (62, 0.047673356),
+            (69, 0.09395622, True),
+            (78, 0.04492707)
         ],
-        timeline_color=XGBars.get_rgb_from_xg(0.11),
-        timeline_ticks_color=XGBars.get_rgb_from_xg(0.11),
+        timeline_color=XGBars.get_rgb_from_xg(0.02),
+        timeline_ticks_color=XGBars.get_rgb_from_xg(0.02),
         saveto=r"C:\Users\anas3\Desktop\01.png",
     )
