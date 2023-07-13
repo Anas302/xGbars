@@ -95,7 +95,6 @@ class XGBars:
                  timeline_height: float = 0.25,
                  bars_width: float = 0.5,
                  bars_height: float = 2.4,
-                 goals_outline: str = 'none',
                  has_serif: bool = True,
                  dynamic_width: bool = True,
                  center_ticks: bool = False,
@@ -116,8 +115,6 @@ class XGBars:
         :param timeline_height: the height of the timeline (x-axis).
         :param bars_width: the width of all xG bars. Defaults to 0.2
         :param bars_height: the height of the xG bars. Defaults to 1.0
-        :param goals_outline: how the goals circles will be outlined. Valid values are ['same', 'none']. Set to 'same'
-        by default (outlines have the same color as the xG bar).
         :param has_serif: if True, the white outlines around each goal circle will have a serif from the bar.
         :param dynamic_width: if True, the width of each bar will increase by xG/2.
         :param show: if True (default), the figure will be displayed in a pop-up window.
@@ -148,10 +145,9 @@ class XGBars:
         self.center_ticks = center_ticks
         self.timeline_color = timeline_color
         self.timeline_ticks_type = timeline_ticks_type
-        has_serif = False if goals_outline == 'same' else has_serif
 
         # check the input is correct and valid
-        self._validate_parameters(bars_height, bars_width, goals_outline, saveto)
+        self._validate_parameters(bars_height, bars_width, saveto)
 
         # store the shots tuples as Shot object for processing. If tuple is 2D assume the 3rd value 'isGoal' is False.
         home_scores = [] if home_scores is None else home_scores
@@ -168,7 +164,6 @@ class XGBars:
                             timeline_ticks_type=timeline_ticks_type,
                             timeline_length=timeline_length,
                             bars_height=bars_height,
-                            goals_outlined=goals_outline,
                             has_serif=has_serif,
                             dynamic_width=dynamic_width
                             )
@@ -188,7 +183,6 @@ class XGBars:
                      height: float,
                      isAway: bool,
                      isGoal: bool,
-                     goals_outline: str,
                      has_serif: bool):
         """
         Draw a single xG bar along the timeline axis. If the xG results in a goal, a circle will also be drawn on the
@@ -196,31 +190,29 @@ class XGBars:
         :param minute: the time in minutes in which the xG is to be plotted. The time must be between 0 and 90 minutes.
         :param isAway: whether the xG belongs to the away team or the home team.
         :param isGoal: whether the shot resulted in a goal or not. Set to False by default.
-        :param goals_outline: the type of outline that will be drawn around each goal circle. Valid values:
-        [none', 'same']
         :param has_serif: if True, xG bars with goals will have serifs on their top edges.
         """
         minute = (minute / 10) * (self.bars_width / 0.1)
-        bar_x_position = (minute - width / 2) if self.center_ticks else minute
-        circle_x_position = minute if self.center_ticks else (minute + width / 2)
-        circle_radius = self.bars_width*1.5
+        BAR_X_POSITION = (minute - width / 2) if self.center_ticks else minute
+        CIRCLE_X_POSITION = minute if self.center_ticks else (minute + width / 2)
+        CIRCLE_RADIUS = self.bars_width*1.5
 
         if isAway:  # below the timeline axis
-            bar_y_position = 0.5 - self.timeline_height / 2
-            circle_y_position = -height + bar_y_position - 0.5
-            serif_y_position = bar_y_position + 1.25 - height
-            serif_height = -0.8
+            BAR_Y_POSITION = 0.5 - self.timeline_height / 2
+            CIRCLE_Y_POSITION = -height + BAR_Y_POSITION - 0.5
+            SERIF_Y_POSITION = BAR_Y_POSITION + 1.25 - height
+            SERIF_HEIGHT = -0.8
+            UNDERLINE_HEIGHT = self.timeline_height
             height = (-1 * height)
-            underline_height = self.timeline_height
         else:  # above the timeline axis
-            bar_y_position = 0.5 + self.timeline_height / 2
-            serif_y_position = bar_y_position + height - 1.25
-            serif_height = 0.8
-            circle_y_position = height + bar_y_position + 0.5
-            underline_height = -self.timeline_height
+            BAR_Y_POSITION = 0.5 + self.timeline_height / 2
+            SERIF_Y_POSITION = BAR_Y_POSITION + height - 1.25
+            SERIF_HEIGHT = 0.8
+            CIRCLE_Y_POSITION = height + BAR_Y_POSITION + 0.5
+            UNDERLINE_HEIGHT = -self.timeline_height
 
         # Draw a line underneath each bar
-        bar_underline = Rectangle(xy=(bar_x_position, bar_y_position), width=width, height=underline_height,
+        bar_underline = Rectangle(xy=(BAR_X_POSITION, BAR_Y_POSITION), width=width, height=UNDERLINE_HEIGHT,
                                   fc=color)  # fc = self.timeline_color
         self._ax.add_patch(bar_underline)
 
@@ -228,27 +220,21 @@ class XGBars:
         if isGoal:
             # Draw serifs on the bar's edges
             if has_serif:
-                serif_width = width * 2
-                serif = Serif(xy=(bar_x_position, serif_y_position), width=serif_width, height=serif_height, fc=color)
+                SERIF_WIDTH = width * 2
+                serif = Serif(xy=(BAR_X_POSITION, SERIF_Y_POSITION), width=SERIF_WIDTH, height=SERIF_HEIGHT, fc=color)
                 self._ax.add_patch(serif)
 
-            # Draw an outline around the goal circle with same width and color as the bar
-            if goals_outline == 'same':
-                circle_outline_radius = width + circle_radius
-                goal_outline = Circle(xy=(circle_x_position, circle_y_position), radius=circle_outline_radius, fc=color)
-                self._ax.add_patch(goal_outline)
-            else:  # no outline around the goal circle. Shorten the height of the xG bars
-                height = height + 1 if isAway else height - 1
+            height = height + 1 if isAway else height - 1
 
             # Draw the bar and the goal circle above it
-            goal = Circle(xy=(circle_x_position, circle_y_position), radius=circle_radius, fc='black')
-            bar = Rectangle(xy=(bar_x_position, bar_y_position), width=width, height=height, fc=color)
+            goal = Circle(xy=(CIRCLE_X_POSITION, CIRCLE_Y_POSITION), radius=CIRCLE_RADIUS, fc='black')
+            bar = Rectangle(xy=(BAR_X_POSITION, BAR_Y_POSITION), width=width, height=height, fc=color)
             self._ax.add_patch(bar)
             self._ax.add_patch(goal)
         else:
             # Draw the bar only
             height = height - 0.5 if isAway else height + 0.5
-            bar = Rectangle(xy=(bar_x_position, bar_y_position), width=width, height=height, fc=color)
+            bar = Rectangle(xy=(BAR_X_POSITION, BAR_Y_POSITION), width=width, height=height, fc=color)
             self._ax.add_patch(bar)
 
     def _draw_timeline(self, length: float,
@@ -303,7 +289,6 @@ class XGBars:
                        timeline_ticks_color: Tuple[float, float, float],
                        timeline_length: float,
                        bars_height: float,
-                       goals_outlined: str,
                        has_serif: bool,
                        timeline_ticks_type: str,
                        dynamic_width: bool):
@@ -351,8 +336,7 @@ class XGBars:
                                   isAway=isAway,
                                   isGoal=isGoal,
                                   height=bars_height,
-                                  has_serif=has_serif,
-                                  goals_outline=goals_outlined)
+                                  has_serif=has_serif)
 
         # draw the xG bars with goals at the end to be displayed on front
         for goal in goals:
@@ -369,19 +353,15 @@ class XGBars:
                               isAway=goal.isAway,
                               isGoal=goal.isGoal,
                               height=bars_height,
-                              goals_outline=goals_outlined,
                               has_serif=has_serif)
 
     def _validate_parameters(self, bars_height,
                              bars_width,
-                             goals_outline,
                              saveto):
         assert self.match_time > 0, "Match time cannot be 0 or a negative number"
         assert self.timeline_height > 0, "The timeline cannot have a height of 0 or negative number"
         assert bars_height > 0, "The xG bars' heights cannot be a 0 or negative number"
         assert bars_width > 0, "The xG bars' width cannot be a 0 or negative number"
-        assert goals_outline in ['same', 'none'], "Invalid 'goals_outlined' parameter, must be one of those values:" \
-                                                  "['same', 'none']"
         assert self.timeline_ticks_type in ['bar', 'hole', 'gap'], \
             "Invalid 'timeline_ticks_type' parameter, must be one of those values: ['bar', 'hole', 'gap']"
         if saveto is not None:
