@@ -89,8 +89,7 @@ class XGBars:
                  home_scores: List[Union[Tuple[int, float, bool], Tuple[int, float]]] = None,
                  away_scores: List[Union[Tuple[int, float, bool], Tuple[int, float]]] = None,
                  match_time: int = 90,
-                 timeline_color: tuple = (0.0, 0.0, 0.0),
-                 timeline_ticks_color: tuple = (0.0, 0.0, 0.0),
+                 timeline_color: tuple = (0.85, 0.85, 0.85),
                  timeline_ticks_type: str = 'bar',
                  timeline_height: float = 0.25,
                  bars_width: float = 0.5,
@@ -109,7 +108,6 @@ class XGBars:
         :param away_scores: same as 'home_scores' parameter except the Tuples are for the away team.
         :param match_time: the time of the match for which the xG has been recorded.
         :param timeline_color: the color of the timeline (x-axis). Set to black by default.
-        :param timeline_ticks_color: the color of the timeline ticks. Set to black by default.
         :param timeline_ticks_type: the type of ticks drawn on the timeline. Can be one of following values:
         ['bar', 'hole', 'gap']. Set to 'bar' by default.
         :param timeline_height: the height of the timeline (x-axis).
@@ -130,7 +128,7 @@ class XGBars:
         FIG_WIDTH = (match_time / 10) * (bars_width / 0.1)
         timeline_length = FIG_WIDTH
         self._fig = plt.figure(figsize=(FIG_WIDTH * 0.9, FIG_HEIGHT))
-        self._ax = plt.axes([0, 0, 1, 1], frameon=False)  # change frameon = False to remove box borders
+        self._ax = plt.axes([0, 0, 1, 1], frameon=False)
         self._fig.patch.set_alpha(0)
         self._ax.grid(False)
         self._ax.get_xaxis().set_visible(False)
@@ -138,13 +136,14 @@ class XGBars:
         self._ax.set_aspect("equal")
         self._ax.autoscale(tight=True)
 
-        # xGBars configurations
+        # Global xGBars configurations
         self.bars_width = bars_width
         self.match_time = match_time
         self.timeline_height = timeline_height
         self.center_ticks = center_ticks
         self.timeline_color = timeline_color
         self.timeline_ticks_type = timeline_ticks_type
+        self.has_serifs = has_serif
 
         # check the input is correct and valid
         self._validate_parameters(bars_height, bars_width, saveto)
@@ -160,11 +159,9 @@ class XGBars:
 
         self._create_xGBars(shots_list=all_shots,
                             timeline_color=timeline_color,
-                            timeline_ticks_color=timeline_ticks_color,
                             timeline_ticks_type=timeline_ticks_type,
                             timeline_length=timeline_length,
                             bars_height=bars_height,
-                            has_serif=has_serif,
                             dynamic_width=dynamic_width
                             )
 
@@ -182,33 +179,35 @@ class XGBars:
                      color: tuple,
                      height: float,
                      isAway: bool,
-                     isGoal: bool,
-                     has_serif: bool):
+                     isGoal: bool):
         """
         Draw a single xG bar along the timeline axis. If the xG results in a goal, a circle will also be drawn on the
         bar to indicate a goal. Away team is plotted under the timeline while the home team is plotted over it.
+        :param width: the width of the bar.
+        :param color: the color of the bar.
         :param minute: the time in minutes in which the xG is to be plotted. The time must be between 0 and 90 minutes.
         :param isAway: whether the xG belongs to the away team or the home team.
+        :param height: the height of the bar.
         :param isGoal: whether the shot resulted in a goal or not. Set to False by default.
-        :param has_serif: if True, xG bars with goals will have serifs on their top edges.
         """
         minute = (minute / 10) * (self.bars_width / 0.1)
         BAR_X_POSITION = (minute - width / 2) if self.center_ticks else minute
         CIRCLE_X_POSITION = minute if self.center_ticks else (minute + width / 2)
-        CIRCLE_RADIUS = self.bars_width*1.5
+        CIRCLE_RADIUS = self.bars_width * 1.5
 
         if isAway:  # below the timeline axis
             BAR_Y_POSITION = 0.5 - self.timeline_height / 2
-            CIRCLE_Y_POSITION = -height + BAR_Y_POSITION - 0.5
-            SERIF_Y_POSITION = BAR_Y_POSITION + 1.25 - height
-            SERIF_HEIGHT = -0.8
+            CIRCLE_Y_POSITION = -height + BAR_Y_POSITION - 0.5  # goal circles center align with top of bars
+            # CIRCLE_Y_POSITION = -height + BAR_Y_POSITION - 0.5 + CIRCLE_RADIUS  # goal circles top align with bars top
+            # CIRCLE_Y_POSITION = -height + BAR_Y_POSITION - CIRCLE_RADIUS*1.5  # third alignment
             UNDERLINE_HEIGHT = self.timeline_height
             height = (-1 * height)
         else:  # above the timeline axis
             BAR_Y_POSITION = 0.5 + self.timeline_height / 2
-            SERIF_Y_POSITION = BAR_Y_POSITION + height - 1.25
-            SERIF_HEIGHT = 0.8
-            CIRCLE_Y_POSITION = height + BAR_Y_POSITION + 0.5
+            CIRCLE_Y_POSITION = height + BAR_Y_POSITION + 0.5  # goal circles center align with top of bars
+            # CIRCLE_Y_POSITION = height + BAR_Y_POSITION - CIRCLE_RADIUS + 0.5  # goal circles top align with bars top
+            # CIRCLE_Y_POSITION = height + BAR_Y_POSITION + CIRCLE_RADIUS*1.5  # third alignment
+
             UNDERLINE_HEIGHT = -self.timeline_height
 
         # Draw a line underneath each bar
@@ -216,20 +215,26 @@ class XGBars:
                                   fc=color)  # fc = self.timeline_color
         self._ax.add_patch(bar_underline)
 
-        # If it's a goal, draw a circle without outlines or outlined in the same color as the xG bar
         if isGoal:
             # Draw serifs on the bar's edges
-            if has_serif:
+            # GOAL_BAR_HEIGHT = height + 1.9 if isAway else height - 1.9  # goal circles top align with bars top
+            GOAL_BAR_HEIGHT = height + 1.25 if isAway else height - 1.25  # goal circles center align with top of bars
+            # GOAL_BAR_HEIGHT, self.has_serifs = height - 0.5 if isAway else height + 0.5, False  # third alignment
+
+            if self.has_serifs:
+                SERIF_Y_POSITION = BAR_Y_POSITION + GOAL_BAR_HEIGHT
+                SERIF_Y_POSITION = SERIF_Y_POSITION + 0.01 if isAway else SERIF_Y_POSITION - 0.01  # removes sep. line
+                SERIF_HEIGHT = -0.75 if isAway else 0.75
                 SERIF_WIDTH = width * 2
                 serif = Serif(xy=(BAR_X_POSITION, SERIF_Y_POSITION), width=SERIF_WIDTH, height=SERIF_HEIGHT, fc=color)
                 self._ax.add_patch(serif)
 
-            height = height + 1 if isAway else height - 1
-
-            # Draw the bar and the goal circle above it
-            goal = Circle(xy=(CIRCLE_X_POSITION, CIRCLE_Y_POSITION), radius=CIRCLE_RADIUS, fc='black')
-            bar = Rectangle(xy=(BAR_X_POSITION, BAR_Y_POSITION), width=width, height=height, fc=color)
+            # Draw a shorter bar
+            bar = Rectangle(xy=(BAR_X_POSITION, BAR_Y_POSITION), width=width, height=GOAL_BAR_HEIGHT, fc=color)
             self._ax.add_patch(bar)
+
+            # Draw the circle above the bar
+            goal = Circle(xy=(CIRCLE_X_POSITION, CIRCLE_Y_POSITION), radius=CIRCLE_RADIUS, fc='black')
             self._ax.add_patch(goal)
         else:
             # Draw the bar only
@@ -237,40 +242,39 @@ class XGBars:
             bar = Rectangle(xy=(BAR_X_POSITION, BAR_Y_POSITION), width=width, height=height, fc=color)
             self._ax.add_patch(bar)
 
-    def _draw_timeline(self, length: float,
-                       axis_color: Tuple[float, float, float],
-                       ticks_color: Tuple[float, float, float],
-                       ticks_type: str):
+    def _draw_timeline(self, length: float, axis_color: Tuple[float, float, float], ticks_type: str):
 
         # draw the timeline (x-axis) line
         timeline_y_position = 0.5 - self.timeline_height / 2
-        timeline = Rectangle(xy=(0, timeline_y_position), width=length,
-                             height=self.timeline_height, fc=axis_color)
+        timeline = Rectangle(xy=(0, timeline_y_position), width=length, height=self.timeline_height, fc=axis_color)
         self._ax.add_patch(timeline)
 
+    def _draw_timeline_ticks(self, color, type):
         for minute in range(self.match_time + 2):
             tick_x_position = (minute / 10) * (self.bars_width / 0.1)
 
             # draw tick for every 15 minute. And a bigger tick for minute 45 (half-time).
-            if ticks_type == "bar":
+            if type == "bar":
                 if minute % 15 == 0:
                     if minute % 45 == 0:
                         tick_height = self.timeline_height + 1
                         tick_width = (self.bars_width / 5.0) * 2
-                        tick_y_position = timeline_y_position - ((tick_height - self.timeline_height) / 2.0)
+                        tick_y_position = (0.5 - self.timeline_height / 2) - (
+                                    (tick_height - self.timeline_height) / 2.0)
                         mins_tick = Rectangle(xy=(tick_x_position, tick_y_position),
-                                              width=tick_width, height=tick_height, fc=ticks_color)
+                                              width=tick_width, height=tick_height, fc=color)
                     else:
                         tick_height = self.timeline_height + 0.5
                         tick_width = self.bars_width / 5.0
-                        tick_y_position = timeline_y_position - ((tick_height - self.timeline_height) / 2.0)
+                        tick_y_position = (0.5 - self.timeline_height / 2) - (
+                                    (tick_height - self.timeline_height) / 2.0)
                         mins_tick = Rectangle(xy=(tick_x_position, tick_y_position),
-                                              width=tick_width, height=tick_height, fc=ticks_color)
+                                              width=tick_width, height=tick_height, fc=color)
                     self._ax.add_patch(mins_tick)
 
-            elif ticks_type == "hole":
+            elif type == "hole":
                 if minute % 15 == 0 and minute != 0 and minute != self.match_time:
-                    tick_radius = self.timeline_height / 2.0
+                    tick_radius = self.timeline_height
                     tick_y_position = 0.5
                     mins_tick = Circle(xy=(tick_x_position, tick_y_position), radius=tick_radius, fc='white')
                     self._ax.add_patch(mins_tick)
@@ -279,17 +283,15 @@ class XGBars:
                 if minute % 15 == 0 and minute != 0 and minute != self.match_time:
                     tick_width = self.bars_width if minute % 45 == 0 else self.bars_width / 3.0
                     tick_height = self.timeline_height
-                    tick_y_position = timeline_y_position - ((tick_height - self.timeline_height) / 2.0)
+                    tick_y_position = (0.5 - self.timeline_height / 2.0) - ((tick_height - self.timeline_height) / 2.0)
                     mins_tick = Rectangle(xy=(tick_x_position, tick_y_position),
                                           width=tick_width, height=tick_height, fc='white')
                     self._ax.add_patch(mins_tick)
 
     def _create_xGBars(self, shots_list: List[Shot],
                        timeline_color: Tuple[float, float, float],
-                       timeline_ticks_color: Tuple[float, float, float],
                        timeline_length: float,
                        bars_height: float,
-                       has_serif: bool,
                        timeline_ticks_type: str,
                        dynamic_width: bool):
         """
@@ -307,19 +309,14 @@ class XGBars:
 
         self._draw_timeline(length=timeline_length,
                             axis_color=timeline_color,
-                            ticks_color=timeline_ticks_color,
                             ticks_type=timeline_ticks_type)
 
         # draw the xG bars for the home team shots
         goals = []  # keep shots with goals aside and draw them at the end.
         for shot in shots_list:
             time, xG, isAway, isGoal = shot.minute, shot.xG, shot.isAway, shot.isGoal
-            assert 0 <= xG <= 1, "xG score must be a value between 0 and 1 inclusive"
-            assert 0 <= time <= self.match_time, "Minutes must be a value between 0 and the match time inclusive"
-            assert isinstance(time, int), "Minutes must be an integer"
-            assert isinstance(xG, float) or isinstance(xG, int), "xG score must be an integer or a float"
-            assert isinstance(isAway, bool), "isAway must be a boolean"
-            assert isinstance(isGoal, bool), "isGoal must be a boolean"
+            self._validate_score(time, xG, isAway, isGoal)
+
             if isGoal:
                 goals.append(Shot(time, xG, isAway, isGoal))
             else:
@@ -335,8 +332,7 @@ class XGBars:
                                   color=bar_color,
                                   isAway=isAway,
                                   isGoal=isGoal,
-                                  height=bars_height,
-                                  has_serif=has_serif)
+                                  height=bars_height)
 
         # draw the xG bars with goals at the end to be displayed on front
         for goal in goals:
@@ -352,8 +348,9 @@ class XGBars:
                               color=bar_color,
                               isAway=goal.isAway,
                               isGoal=goal.isGoal,
-                              height=bars_height,
-                              has_serif=has_serif)
+                              height=bars_height)
+
+        self._draw_timeline_ticks(color=timeline_color, type=timeline_ticks_type)
 
     def _validate_parameters(self, bars_height,
                              bars_width,
@@ -366,6 +363,14 @@ class XGBars:
             "Invalid 'timeline_ticks_type' parameter, must be one of those values: ['bar', 'hole', 'gap']"
         if saveto is not None:
             assert os.path.isdir(os.path.dirname(saveto)), f"The provided file path {saveto} doesn't exist"
+
+    def _validate_score(self, time, xG, isAway, isGoal):
+        assert 0 <= xG <= 1, "xG score must be a value between 0 and 1 inclusive"
+        assert 0 <= time <= self.match_time, "Minutes must be a value between 0 and the match time inclusive"
+        assert isinstance(time, int), "Minutes must be an integer"
+        assert isinstance(xG, float) or isinstance(xG, int), "xG score must be an integer or a float"
+        assert isinstance(isAway, bool), "isAway must be a boolean"
+        assert isinstance(isGoal, bool), "isGoal must be a boolean"
 
     def _save_figure(self, saveto):
         # NOTE: saving the figure as .png with `timeline_tick_type` set to any value other than 'bar' is slow
@@ -525,7 +530,6 @@ if __name__ == '__main__':
             (69, 0.09395622, True),
             (78, 0.04492707)
         ],
-        timeline_color=XGBars.get_rgb_from_xg(0.02),
-        timeline_ticks_color=XGBars.get_rgb_from_xg(0.02),
         saveto=r"C:\Users\anas3\Desktop\01.png",
+        timeline_ticks_type='hole'
     )
