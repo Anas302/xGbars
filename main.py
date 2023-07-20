@@ -89,8 +89,8 @@ class XGBars:
                  home_scores: List[Union[Tuple[int, float, bool], Tuple[int, float]]] = None,
                  away_scores: List[Union[Tuple[int, float, bool], Tuple[int, float]]] = None,
                  match_time: int = 90,
-                 timeline_color: tuple = (0.85, 0.85, 0.85),
-                 timeline_ticks_type: str = 'bar',
+                 timeline_color: tuple = (0.85, 0.85, 0.85),  # corresponds to xG = 0.11 (the average)
+                 timeline_ticks_type: str = 'hole',
                  timeline_height: float = 0.25,
                  bars_width: float = 0.5,
                  bars_height: float = 2.4,
@@ -197,16 +197,16 @@ class XGBars:
 
         if isAway:  # below the timeline axis
             BAR_Y_POSITION = 0.5 - self.timeline_height / 2
-            CIRCLE_Y_POSITION = -height + BAR_Y_POSITION - 0.5  # goal circles center align with top of bars
+            # CIRCLE_Y_POSITION = -height + BAR_Y_POSITION - 0.5  # goal circles center align with top of bars
             # CIRCLE_Y_POSITION = -height + BAR_Y_POSITION - 0.5 + CIRCLE_RADIUS  # goal circles top align with bars top
-            # CIRCLE_Y_POSITION = -height + BAR_Y_POSITION - CIRCLE_RADIUS*1.5  # third alignment
+            CIRCLE_Y_POSITION = -height + BAR_Y_POSITION - CIRCLE_RADIUS*1.5  # third alignment
             UNDERLINE_HEIGHT = self.timeline_height
             height = (-1 * height)
         else:  # above the timeline axis
             BAR_Y_POSITION = 0.5 + self.timeline_height / 2
-            CIRCLE_Y_POSITION = height + BAR_Y_POSITION + 0.5  # goal circles center align with top of bars
+            # CIRCLE_Y_POSITION = height + BAR_Y_POSITION + 0.5  # goal circles center align with top of bars
             # CIRCLE_Y_POSITION = height + BAR_Y_POSITION - CIRCLE_RADIUS + 0.5  # goal circles top align with bars top
-            # CIRCLE_Y_POSITION = height + BAR_Y_POSITION + CIRCLE_RADIUS*1.5  # third alignment
+            CIRCLE_Y_POSITION = height + BAR_Y_POSITION + CIRCLE_RADIUS*1.5  # third alignment
 
             UNDERLINE_HEIGHT = -self.timeline_height
 
@@ -218,8 +218,8 @@ class XGBars:
         if isGoal:
             # Draw serifs on the bar's edges
             # GOAL_BAR_HEIGHT = height + 1.9 if isAway else height - 1.9  # goal circles top align with bars top
-            GOAL_BAR_HEIGHT = height + 1.25 if isAway else height - 1.25  # goal circles center align with top of bars
-            # GOAL_BAR_HEIGHT, self.has_serifs = height - 0.5 if isAway else height + 0.5, False  # third alignment
+            # GOAL_BAR_HEIGHT = height + 1.25 if isAway else height - 1.25  # goal circles center align with top of bars
+            GOAL_BAR_HEIGHT = height + 0.5 if isAway else height - 0.5  # third alignment
 
             if self.has_serifs:
                 SERIF_Y_POSITION = BAR_Y_POSITION + GOAL_BAR_HEIGHT
@@ -242,7 +242,7 @@ class XGBars:
             bar = Rectangle(xy=(BAR_X_POSITION, BAR_Y_POSITION), width=width, height=height, fc=color)
             self._ax.add_patch(bar)
 
-    def _draw_timeline(self, length: float, axis_color: Tuple[float, float, float], ticks_type: str):
+    def _draw_timeline(self, length: float, axis_color: Tuple[float, float, float]):
 
         # draw the timeline (x-axis) line
         timeline_y_position = 0.5 - self.timeline_height / 2
@@ -307,9 +307,7 @@ class XGBars:
         create_XGBars([Shot(12, 0.76, True), Shot(42, 0.5, False), Shot(50, 0.67, False, True), Shot(77, 0.23, True)])
         """
 
-        self._draw_timeline(length=timeline_length,
-                            axis_color=timeline_color,
-                            ticks_type=timeline_ticks_type)
+        self._draw_timeline(length=timeline_length, axis_color=timeline_color)
 
         # draw the xG bars for the home team shots
         goals = []  # keep shots with goals aside and draw them at the end.
@@ -352,9 +350,7 @@ class XGBars:
 
         self._draw_timeline_ticks(color=timeline_color, type=timeline_ticks_type)
 
-    def _validate_parameters(self, bars_height,
-                             bars_width,
-                             saveto):
+    def _validate_parameters(self, bars_height, bars_width, saveto):
         assert self.match_time > 0, "Match time cannot be 0 or a negative number"
         assert self.timeline_height > 0, "The timeline cannot have a height of 0 or negative number"
         assert bars_height > 0, "The xG bars' heights cannot be a 0 or negative number"
@@ -531,5 +527,4 @@ if __name__ == '__main__':
             (78, 0.04492707)
         ],
         saveto=r"C:\Users\anas3\Desktop\01.png",
-        timeline_ticks_type='hole'
     )
